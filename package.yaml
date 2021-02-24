@@ -28,11 +28,13 @@ dependencies:
 - opaleye
 - bytestring
 - text
+- tuple
 - product-profunctors
 - contravariant
 - contravariant-extras
 - time
 - lens
+- postgresql-simple
 - aeson
 
 library:

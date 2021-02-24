@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e1162259eba2c213ba8a505ce4883c497d481cf000b6c14e0f245756ce85b45e
+-- hash: ed3d1ea50e4e415c7e0503c172a5f23c6147854cd8557ea0c9eea4603b589414
 
 name:           code-consortium-bot
 version:        0.1.0.0
@@ -45,10 +45,12 @@ library
     , lens
     , opaleye
     , parsec
+    , postgresql-simple
     , product-profunctors
     , text
     , time
     , transformers
+    , tuple
   default-language: Haskell2010
 
 executable code-consortium-bot-exe
@@ -70,10 +72,12 @@ executable code-consortium-bot-exe
     , lens
     , opaleye
     , parsec
+    , postgresql-simple
     , product-profunctors
     , text
     , time
     , transformers
+    , tuple
   default-language: Haskell2010
 
 test-suite code-consortium-bot-test
@@ -96,8 +100,10 @@ test-suite code-consortium-bot-test
     , lens
     , opaleye
     , parsec
+    , postgresql-simple
     , product-profunctors
     , text
     , time
     , transformers
+    , tuple
   default-language: Haskell2010
