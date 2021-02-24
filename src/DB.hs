@@ -1,6 +1,15 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module DB where
+module DB 
+( problemSelect
+, userSelect
+, getAllProblems
+, matchesId
+, getProbById
+, getInputsById
+, addUser
+, verifySolution
+) where
 
 import Control.Lens
 import Control.Monad.IO.Class (MonadIO, liftIO)
@@ -20,6 +29,7 @@ type ContrJoin a = Table a a
 type ProbFieldsI =
   ( Maybe (Field SqlInt4)
   , Field SqlText
+  , Maybe (Field SqlInt4)
   , Field SqlText
   , Field SqlTimestamptz
   )
@@ -27,6 +37,7 @@ type ProbFieldsI =
 type ProbFieldsO =
   ( Field SqlInt4
   , Field SqlText
+  , Field SqlInt4
   , Field SqlText
   , Field SqlTimestamptz
   )
@@ -41,9 +52,10 @@ serialField = optionalTableField
 
 probTable :: ProbTable
 probTable =
-  ccTable "Problems" $ p4
+  ccTable "Problems" $ p5
       ( serialField "id"
       , tableField  "name"
+      , serialField  "n_inputs"
       , tableField  "description"
       , tableField  "submitted_at"
       )
@@ -80,7 +92,7 @@ type InputFields =
   ( Field SqlInt4
   , Field SqlInt4
   , Field SqlJson
-  , Field SqlInt4
+  , Field SqlText
   )
 
 type InputTable = Table InputFields InputFields
@@ -115,21 +127,23 @@ userSelect us = withConn $ (map (uncurryN User . (_2 %~ GroupId)) <$>) . (`runSe
 getAllProblems :: DB [Problem]
 getAllProblems = problemSelect (selectTable probTable)
 
-matchId :: Column SqlInt4 -> ProbId -> Select ()
-matchId sqlId probId = _where $ sqlId .== sqlInt4 (getId probId)
+matchesId :: Column SqlInt4 -> Int -> Column SqlBool
+matchesId a b = a .== sqlInt4 b
 
 getProbById :: ProbId -> DB [Problem]
-getProbById probId = problemSelect $ do
-  rows@(_probId, _, _, _) <- selectTable probTable
-  matchId _probId probId
+getProbById (ProbId p) = problemSelect $ do
+  rows@(_probId, _, _, _, _) <- selectTable probTable
+  _where (_probId `matchesId` p)
   pure rows
 
-getInputsById :: ProbId -> DB [Inputs]
-getInputsById probId = withConn $ (map fromRow <$>) . (`runSelect` q)
-  where fromRow = uncurryN Inputs . (_1 %~ pack) . (_2 %~ GroupId)
+-- for questions where number of inputs < number of total user groups
+
+getInputsById :: ProbId -> GroupId -> DB [Inputs]
+getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect` q))
+  where fromRow = uncurryN Inputs . (_1 %~ pack) . (_2 %~ GroupId) . (_3 %~ pack)
         q = do
           rows@(_probId, groupId, json, ans) <- selectTable inputTable
-          matchId _probId probId
+          where_ (_probId `matchesId` p)
           pure (json, groupId, ans)
 
 addUser :: Text -> GroupId -> DB User
@@ -140,3 +154,12 @@ addUser username (GroupId gid) = withConn $ flip runInsert_ Insert
   , iOnConflict = Just DoNothing
   }
   where userRow = [(Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)]
+
+nthModulo :: Int -> [a] -> a
+nthModulo n = (!! n) . cycle
+
+verifySolution :: ProbId -> User -> Text -> DB Bool
+verifySolution probId user ans = do
+  (prb: _) <- getProbById probId
+  inp <- nthModulo (prb ^. probInputs) <$> getInputsById probId (user ^. userGroup)
+  pure $ inp ^. answer == ans

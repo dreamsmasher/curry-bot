@@ -23,6 +23,7 @@ newtype GroupId = GroupId {getGrp :: Int} deriving (Eq, Show, Generic)
 data Problem = Problem
     { _probId     :: ProbId
     , _probName   :: Text
+    , _probInputs :: Int
     , _probDesc   :: Text
     , _probSubmit :: UTCTime
     } deriving (Eq, Show)
@@ -38,7 +39,7 @@ data User = User
 data Inputs = Inputs 
     { _inputJson :: Text -- don't need to decode
     , _groupId   :: GroupId
-    , _answer    :: Int
+    , _answer    :: Text
     } deriving (Eq, Show)
 
 makeLenses ''Problem

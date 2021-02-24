@@ -3,8 +3,9 @@ create schema if not exists CCData;
 create table if not exists Problems 
 ( id serial primary key
 , name varchar not null
+, n_inputs int not null default 0
 , description text not null
-, submitted_at timestamptz not null
+, submitted_at timestamptz default current_timestamp
 );
 
 create table if not exists Users
@@ -19,5 +20,17 @@ create table if not exists Inputs
 ( problem_id integer references Problems(id)
 , group_id int not null
 , input json not null
-, answer int not null
-)
+, answer json not null
+);
+
+create or replace function inc_ref_count() returns trigger as $$
+    begin
+        update Problems set n_inputs = n_inputs + 1
+        where id = NEW.problem_id;
+        return NEW;
+    end;
+$$
+language plpgsql volatile;
+
+create trigger inc_ref_count
+    after insert on Inputs for each row execute procedure inc_ref_count();
