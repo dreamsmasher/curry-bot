@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ea13d4f2c702a6d877c86432fdaccc911bbd8994e90ce185fcb6eaa3f289bc14
+-- hash: e5519510cb8f37e1ceb2ce2b3572dd6d8924d452407efabb1667399aad2a6bcc
 
 name:           code-consortium-bot
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       DB
+      Errors
       Lib
       Types
       Utils
@@ -35,7 +36,7 @@ library
       Paths_code_consortium_bot
   hs-source-dirs:
       src
-  default-extensions: TypeApplications OverloadedStrings ImportQualifiedPost
+  default-extensions: TypeApplications OverloadedStrings ImportQualifiedPost LambdaCase TupleSections
   build-depends:
       aeson
     , base >=4.7 && <5
@@ -62,7 +63,7 @@ executable code-consortium-bot-exe
       Paths_code_consortium_bot
   hs-source-dirs:
       app
-  default-extensions: TypeApplications OverloadedStrings ImportQualifiedPost
+  default-extensions: TypeApplications OverloadedStrings ImportQualifiedPost LambdaCase TupleSections
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       aeson

@@ -15,7 +15,7 @@ import Data.Aeson.TH
 import Data.Aeson (FromJSON, ToJSON (..), genericToEncoding)
 
 -- represents a function that takes a DB connection
-type DB = ReaderT Connection IO
+
 
 newtype ProbId = ProbId {getId :: Int} deriving (Eq, Show, Generic)
 newtype GroupId = GroupId {getGrp :: Int} deriving (Eq, Show, Generic)

@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts, TypeOperators #-}
 
 module DB 
 ( problemSelect
@@ -16,6 +16,7 @@ module DB
 import Control.Lens
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad
+import Errors
 import Control.Monad.Trans.Reader
 import Data.Int (Int64)
 import Data.Functor
@@ -27,6 +28,11 @@ import Data.Tuple.Curry (Curry, uncurryN)
 import Database.PostgreSQL.Simple (Connection)
 import Opaleye
 import Types
+import Control.Monad.Trans.Except ( ExceptT )
+
+type DB = ReaderT Connection IO
+
+type DBErr = ExceptT SubmissionError DB
 
 type ContrJoin a = Table a a
 

@@ -44,6 +44,8 @@ library:
     - TypeApplications
     - OverloadedStrings
     - ImportQualifiedPost
+    - LambdaCase
+    - TupleSections
 
 executables:
   code-consortium-bot-exe:
@@ -59,7 +61,8 @@ executables:
       - TypeApplications
       - OverloadedStrings
       - ImportQualifiedPost
-
+      - LambdaCase
+      - TupleSections
 
 tests:
   code-consortium-bot-test:
