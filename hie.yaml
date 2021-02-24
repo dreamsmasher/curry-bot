@@ -1,0 +1,13 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "code-consortium-bot:lib"
+
+    - path: "./app/Main.hs"
+      component: "code-consortium-bot:exe:code-consortium-bot-exe"
+
+    - path: "./app/Paths_code_consortium_bot.hs"
+      component: "code-consortium-bot:exe:code-consortium-bot-exe"
+
+    - path: "./test"
+      component: "code-consortium-bot:test:code-consortium-bot-test"

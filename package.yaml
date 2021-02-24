@@ -1,0 +1,61 @@
+name:                code-consortium-bot
+version:             0.1.0.0
+github:              "dreamsmasher/code-consortium-bot"
+license:             BSD3
+author:              "Norman Liu"
+maintainer:          "normanwuweiliu@gmail.com"
+copyright:           "Copright 2020 Norman Liu"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/dreamsmasher/code-consortium-bot#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- transformers
+- containers
+- parsec
+- discord-haskell
+- opaleye
+- bytestring
+- text
+- product-profunctors
+- contravariant
+- contravariant-extras
+- time
+- lens
+- aeson
+
+library:
+  source-dirs: src
+
+executables:
+  code-consortium-bot-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - code-consortium-bot
+
+tests:
+  code-consortium-bot-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - code-consortium-bot
