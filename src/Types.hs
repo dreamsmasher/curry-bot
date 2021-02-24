@@ -18,6 +18,7 @@ import Data.Aeson (FromJSON, ToJSON (..), genericToEncoding)
 type DB = ReaderT Connection IO
 
 newtype ProbId = ProbId {getId :: Int} deriving (Eq, Show, Generic)
+newtype GroupId = GroupId {getGrp :: Int} deriving (Eq, Show, Generic)
 
 data Problem = Problem
     { _probId     :: ProbId
@@ -28,6 +29,7 @@ data Problem = Problem
 
 data User = User
     { _userId     :: Int
+    , _userGroup  :: GroupId
     , _userName   :: Text
     , _userScore  :: Int
     , _userSolved :: Int
@@ -35,7 +37,8 @@ data User = User
 
 data Inputs = Inputs 
     { _inputJson :: Text -- don't need to decode
-    , _answer :: Int
+    , _groupId   :: GroupId
+    , _answer    :: Int
     } deriving (Eq, Show)
 
 makeLenses ''Problem
@@ -45,6 +48,10 @@ makeLenses ''Inputs
 -- using generics for automatic instances
 instance FromJSON ProbId where
 instance ToJSON ProbId where
+    toEncoding = genericToEncoding defaultOptions
+
+instance FromJSON GroupId where
+instance ToJSON GroupId where
     toEncoding = genericToEncoding defaultOptions
 
 -- can't abstract these options into a common thing within the same module
