@@ -36,9 +36,14 @@ dependencies:
 - lens
 - postgresql-simple
 - aeson
+- split
 
 library:
   source-dirs: src
+  default-extensions:
+    - TypeApplications
+    - OverloadedStrings
+    - ImportQualifiedPost
 
 executables:
   code-consortium-bot-exe:
@@ -50,6 +55,11 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - code-consortium-bot
+    default-extensions:
+      - TypeApplications
+      - OverloadedStrings
+      - ImportQualifiedPost
+
 
 tests:
   code-consortium-bot-test:

@@ -8,14 +8,18 @@ module DB
 , getProbById
 , getInputsById
 , addUser
+, getUser
 , verifySolution
+, updateScore
 ) where
 
 import Control.Lens
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad
 import Control.Monad.Trans.Reader
+import Data.Int (Int64)
 import Data.Functor
+import Data.Maybe
 import Data.Profunctor.Product
 import Data.Text (Text, pack)
 import Data.Time (UTCTime)
@@ -31,7 +35,7 @@ type ProbFieldsI =
   , Field SqlText
   , Maybe (Field SqlInt4)
   , Field SqlText
-  , Field SqlTimestamptz
+  , Maybe (Field SqlTimestamptz)
   )
 
 type ProbFieldsO =
@@ -44,20 +48,17 @@ type ProbFieldsO =
 
 type ProbTable = Table ProbFieldsI ProbFieldsO
 
-ccTable :: String -> TableFields writeFields viewFields -> Table writeFields viewFields
-ccTable = tableWithSchema "CCData"
-
 serialField :: String -> TableFields (Maybe (Column a)) (Column a)
 serialField = optionalTableField
 
 probTable :: ProbTable
 probTable =
-  ccTable "Problems" $ p5
+  table "problems" $ p5
       ( serialField "id"
       , tableField  "name"
-      , serialField  "n_inputs"
+      , serialField "n_inputs"
       , tableField  "description"
-      , tableField  "submitted_at"
+      , serialField "submitted_at"
       )
 
 type UserFieldsI =
@@ -80,7 +81,7 @@ type UserTable = Table UserFieldsI UserFieldsO
 
 userTable :: UserTable
 userTable =
-  ccTable "Users" $ p5
+  table "users" $ p5
       ( serialField "id"
       , tableField  "group_id"
       , tableField  "discord_name"
@@ -99,7 +100,7 @@ type InputTable = Table InputFields InputFields
 
 inputTable :: InputTable
 inputTable =
-  ccTable "Inputs" $ p4
+  table "inputs" $ p4
       ( tableField "problem_id"
       , tableField "group_id"
       , tableField "json"
@@ -121,8 +122,18 @@ withConn f = do
 problemSelect :: Select ProbFieldsO -> DB [Problem]
 problemSelect ps = withConn $ (map (uncurryN $ Problem . ProbId) <$>) . (`runSelect` ps)
 
+toUser :: (Int, Int, Text, Int, Int) -> User 
+toUser = uncurryN User . (_2 %~ GroupId)
+
 userSelect :: Select UserFieldsO -> DB [User]
-userSelect us = withConn $ (map (uncurryN User . (_2 %~ GroupId)) <$>) . (`runSelect` us)
+userSelect us = withConn $ (map toUser <$>) . (`runSelect` us)
+
+getUser :: Text -> DB (Maybe User)
+getUser usr = listToMaybe <$> userSelect ( do
+  rows@(_, _, dsc, _, _) <- selectTable userTable
+  where_ (dsc .== sqlStrictText usr)
+  pure rows 
+  )
 
 getAllProblems :: DB [Problem]
 getAllProblems = problemSelect (selectTable probTable)
@@ -130,11 +141,12 @@ getAllProblems = problemSelect (selectTable probTable)
 matchesId :: Column SqlInt4 -> Int -> Column SqlBool
 matchesId a b = a .== sqlInt4 b
 
-getProbById :: ProbId -> DB [Problem]
-getProbById (ProbId p) = problemSelect $ do
+getProbById :: ProbId -> DB (Maybe Problem)
+getProbById (ProbId p) = listToMaybe <$> problemSelect ( do
   rows@(_probId, _, _, _, _) <- selectTable probTable
   _where (_probId `matchesId` p)
   pure rows
+  )
 
 -- for questions where number of inputs < number of total user groups
 
@@ -146,11 +158,11 @@ getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect
           where_ (_probId `matchesId` p)
           pure (json, groupId, ans)
 
-addUser :: Text -> GroupId -> DB User
+addUser :: Text -> GroupId -> DB Int64
 addUser username (GroupId gid) = withConn $ flip runInsert_ Insert
   { iTable = userTable
   , iRows = userRow
-  , iReturning = undefined
+  , iReturning = rCount
   , iOnConflict = Just DoNothing
   }
   where userRow = [(Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)]
@@ -160,6 +172,22 @@ nthModulo n = (!! n) . cycle
 
 verifySolution :: ProbId -> User -> Text -> DB Bool
 verifySolution probId user ans = do
-  (prb: _) <- getProbById probId
-  inp <- nthModulo (prb ^. probInputs) <$> getInputsById probId (user ^. userGroup)
-  pure $ inp ^. answer == ans
+  maybeProb <- getProbById probId
+  flip (maybe (pure False)) maybeProb $ \prb -> do
+    inp <- nthModulo (prb ^. probInputs) <$> getInputsById probId (user ^. userGroup)
+    pure $ inp ^. answer == ans
+
+updateScore :: User -> Int -> DB (Maybe Int)
+updateScore u sc = listToMaybe <$> withConn (`runUpdate_` Update 
+  { uTable = userTable
+  , uReturning = rReturningI (view _4) 
+    -- different type from the update fields
+    -- and existentially quantifying tupScore with a forall would
+    -- require more imports
+  , uUpdateWith = (tupId %~ Just) . (tupSolved %~ (+ 1)) . (tupScore %~ (fromIntegral sc +))
+  , uWhere = (sqlInt4 (u ^. userId) .==) . view _1
+  })
+  where tupSolved = _5 -- tuples everywhere....
+        tupId = _1
+        tupScore = _4
+       

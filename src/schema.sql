@@ -1,5 +1,3 @@
-create schema if not exists CCData;
-
 create table if not exists Problems 
 ( id serial primary key
 , name varchar not null
@@ -14,6 +12,7 @@ create table if not exists Users
 , discord_name varchar(64) not null
 , score int not null
 , solved int not null
+, unique(discord_name)
 );
 
 create table if not exists Inputs
