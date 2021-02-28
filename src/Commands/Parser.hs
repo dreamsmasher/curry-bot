@@ -1,9 +1,8 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE OverloadedStrings #-}
 module Commands.Parser where
 
-import Text.Parsec
-import Text.ParserCombinators.Parsec (Parser)
--- import Text.Parser
+-- import Text.Parsec
+import Text.ParserCombinators.Parsec 
 import Data.Text qualified as T
 import Data.Text (Text)
 import Data.Char (toLower, toUpper, chr, ord)
@@ -60,4 +59,9 @@ parseBotReq = do
         Get -> spaces >> parseProbId <&> GetR
         New -> pure NewR
         Input -> pure InputR
+        Signup -> pure SignupR
         -- these two are expected to be passed in as JSON
+
+-- TODO: figure out if the constant packing/unpacking hurts performance
+parseMessage :: Text -> Either ParseError BotReq
+parseMessage = parse parseBotReq "" . T.unpack

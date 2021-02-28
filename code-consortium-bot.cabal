@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 736a5ae074a54c5514606be11726da6144d9e372a0445661f8e28f67e39ba1cc
+-- hash: 75979195f8b57c4fcd6e1f145b15105f0e12d4292ee4cbf8b4f43847ed343a8d
 
 name:           code-consortium-bot
 version:        0.1.0.0
@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      Commands.Handler
       Commands.Parser
       Commands.TH
       Commands.Types

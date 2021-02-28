@@ -16,4 +16,4 @@ data BotReq where
     GetR :: ProbId -> BotReq
     NewR :: BotReq
     InputR :: BotReq
-    deriving (Eq, Show)
+    SignupR :: BotReq deriving (Eq, Show)
