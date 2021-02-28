@@ -17,7 +17,7 @@ withConn url f = do
     close conn
 
 main :: IO ()
-main = withConn "dbname='code-consortium'" $ runReaderT $ do
+main = pure () -- withConn "dbname='code-consortium'" $ runReaderT $ do
     -- liftIO $ putStrLn "henlo!"
     -- let s = "Dreamsmasher#4819"
     -- -- ct <- addUser s (GroupId (genUserGroup s))
