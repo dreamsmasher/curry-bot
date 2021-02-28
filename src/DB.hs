@@ -8,12 +8,15 @@ module DB
 , getProbById
 , getInputsById
 , addUser
+, addInput
+, addProblem
 , getUser
 , verifySolution
 , updateScore
 ) where
 
 import Control.Lens
+import Control.Arrow
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad
 import Errors
@@ -212,4 +215,18 @@ updateScore u sc = listToMaybe <$> withConn (`runUpdate_` Update
   where tupId     = _1
         tupScore  = _4
         tupSolved = _5 -- tuples everywhere....
-       
+
+updateProblem :: Problem -> DB (Maybe Problem)
+updateProblem p = Just p <$ withConn (`runUpdate_` Update 
+  { uTable = probTable
+  , uReturning = rCount
+  , uUpdateWith = \(id, nm, ni, ds, sa) -> 
+      ( Just id
+      , sqlStrictText (p ^. probName)
+      , Just ni
+      , sqlStrictText (p ^. probDesc)
+      , Just sa
+      )
+  , uWhere = (p & (view probId >>> getId >>> sqlInt4 >>> (.==))) . view _1
+  })
+  where setWith tLens pLens = tLens .~ sqlStrictText (p ^. pLens)
