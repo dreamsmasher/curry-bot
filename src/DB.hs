@@ -22,7 +22,9 @@ import Data.Int (Int64)
 import Data.Functor
 import Data.Maybe
 import Data.Profunctor.Product
+import Data.Profunctor 
 import Data.Text (Text, pack)
+import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
 import Data.Tuple.Curry (Curry, uncurryN)
 import Database.PostgreSQL.Simple (Connection)
@@ -154,7 +156,13 @@ getProbById (ProbId p) = listToMaybe <$> problemSelect ( do
   pure rows
   )
 
--- for questions where number of inputs < number of total user groups
+insertVal :: Table insRow outRow -> insRow -> DB Int64
+insertVal t row = withConn $ flip runInsert_ Insert
+  { iTable = t
+  , iRows = [row]
+  , iReturning = rCount
+  , iOnConflict = Just DoNothing
+  }
 
 getInputsById :: ProbId -> GroupId -> DB [Inputs]
 getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect` q))
@@ -165,22 +173,30 @@ getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect
           pure (json, groupId, ans)
 
 addUser :: Text -> GroupId -> DB Int64
-addUser username (GroupId gid) = withConn $ flip runInsert_ Insert
-  { iTable = userTable
-  , iRows = userRow
-  , iReturning = rCount
-  , iOnConflict = Just DoNothing
-  }
-  where userRow = [(Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)]
+addUser username (GroupId gid) = insertVal userTable 
+  (Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)
 
-nthModulo :: Int -> [a] -> a
-nthModulo n = (!! n) . cycle
+addProblem :: Text -> Text -> DB Int64
+addProblem name desc = insertVal probTable 
+  (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing)
+
+addInput :: ProbId -> GroupId -> Text -> Text -> DB Int64
+addInput pid gid inpJson ans = insertVal inputTable
+  ( sqlInt4 . getId $ pid
+  , sqlInt4 . getGrp $ gid
+  , sqlStrictJSON . encodeUtf8 $ inpJson
+  , sqlStrictText ans
+  )
+
+nthModulo :: Int -> Int -> [a] -> a
+nthModulo len n = (!! (n `mod` len))
 
 verifySolution :: ProbId -> User -> Text -> DB Bool
 verifySolution probId user ans = do
   maybeProb <- getProbById probId
   flip (maybe (pure False)) maybeProb $ \prb -> do
-    inp <- nthModulo (prb ^. probInputs) <$> getInputsById probId (user ^. userGroup)
+    let grp = user ^. userGroup;
+    inp <- nthModulo (prb ^. probInputs) (getGrp grp) <$> getInputsById probId (user ^. userGroup)
     pure $ inp ^. answer == ans
 
 updateScore :: User -> Int -> DB (Maybe Int)
@@ -193,7 +209,7 @@ updateScore u sc = listToMaybe <$> withConn (`runUpdate_` Update
   , uUpdateWith = (tupId %~ Just) . (tupSolved %~ (+ 1)) . (tupScore %~ (fromIntegral sc +))
   , uWhere = (sqlInt4 (u ^. userId) .==) . view _1
   })
-  where tupSolved = _5 -- tuples everywhere....
-        tupId = _1
-        tupScore = _4
+  where tupId     = _1
+        tupScore  = _4
+        tupSolved = _5 -- tuples everywhere....
        

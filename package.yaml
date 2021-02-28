@@ -37,6 +37,7 @@ dependencies:
 - postgresql-simple
 - aeson
 - split
+- profunctors
 
 library:
   source-dirs: src

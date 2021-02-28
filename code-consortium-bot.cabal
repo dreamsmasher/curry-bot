@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: e5519510cb8f37e1ceb2ce2b3572dd6d8924d452407efabb1667399aad2a6bcc
+-- hash: a7be3c1ea77a236c47c31ecc1e3b4e264661eefc9629b0c73799f65ebf49a5db
 
 name:           code-consortium-bot
 version:        0.1.0.0
@@ -50,6 +50,7 @@ library
     , parsec
     , postgresql-simple
     , product-profunctors
+    , profunctors
     , split
     , text
     , time
@@ -79,6 +80,7 @@ executable code-consortium-bot-exe
     , parsec
     , postgresql-simple
     , product-profunctors
+    , profunctors
     , split
     , text
     , time
@@ -108,6 +110,7 @@ test-suite code-consortium-bot-test
     , parsec
     , postgresql-simple
     , product-profunctors
+    , profunctors
     , split
     , text
     , time
