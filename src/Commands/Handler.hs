@@ -26,8 +26,8 @@ import Commands.Types
 
 type DSToken = Text
 
-buildBotOpts :: Connection -> DSToken -> RunDiscordOpts
-buildBotOpts conn tok =
+buildBotOpts :: DSToken -> Connection -> RunDiscordOpts
+buildBotOpts tok conn =
   def
     { discordToken = tok
     , discordOnEvent = eventHandler conn
@@ -48,8 +48,8 @@ respond msg txt = () <$ restCall (CreateMessage (messageChannel msg) txt)
 
 messageHandler :: Connection -> Message -> DiscordHandler ()
 messageHandler conn msg = when (sentByHuman msg) $ do
-  case parseMessage (messageText msg) of
-    Left err -> pure ()
+  case parseMessage (messageText msg) of -- chances are we'll fail since every message is parsed
+    Left _ -> pure ()
     Right cmd -> case cmd of
       SubmitR p t -> undefined
       GetR p -> undefined
