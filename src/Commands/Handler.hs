@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 module Commands.Handler where
 
 import Control.Applicative
@@ -50,15 +51,19 @@ messageHandler :: Connection -> Message -> DiscordHandler ()
 messageHandler conn msg = when (sentByHuman msg) $ do
   case parseMessage (messageText msg) of -- chances are we'll fail since every message is parsed
     Left _ -> pure ()
-    Right cmd -> case cmd of
-      SubmitR p t -> undefined
-      GetR p -> undefined
-      NewR -> undefined
-      InputR -> undefined
-      SignupR -> signup conn msg
+    Right cmd -> do
+      let 
+        f = case cmd of
+          SubmitR p t -> handleSubmit p t 
+          GetR p -> undefined
+          NewR -> undefined
+          InputR -> undefined
+          SignupR -> signup 
+      f conn msg
 
-tShow :: (Show a) => a -> Text
-tShow = T.pack . show
+
+handleSubmit :: ProbId -> Text -> Connection -> Message -> DiscordHandler ()
+handleSubmit pid ans conn msg = pure ()
 
 runDB :: MonadIO m => r -> ReaderT r IO a -> m a
 runDB conn f = liftIO $ runReaderT f conn

@@ -12,3 +12,5 @@ genUserGroup :: U.User -> GroupId
 genUserGroup user = GroupId 
                   $ fromMaybe 0 (readMaybe (T.unpack (U.userDiscrim user))) `mod` 20
                     
+tShow :: (Show a) => a -> Text
+tShow = T.pack . show

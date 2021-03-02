@@ -4,6 +4,7 @@ create table if not exists Problems
 , n_inputs int not null default 0
 , description text not null
 , submitted_at timestamptz default current_timestamp
+, solution_type varchar not null 
 );
 
 create table if not exists Users

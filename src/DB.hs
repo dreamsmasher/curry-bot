@@ -33,6 +33,7 @@ import Data.Tuple.Curry (Curry, uncurryN)
 import Database.PostgreSQL.Simple (Connection)
 import Opaleye
 import Types
+import Utils (tShow)
 import Control.Monad.Trans.Except ( ExceptT )
 
 type DB = ReaderT Connection IO
@@ -47,6 +48,7 @@ type ProbFieldsI =
   , Maybe (Field SqlInt4)
   , Field SqlText
   , Maybe (Field SqlTimestamptz)
+  , Field SqlText
   )
 
 type ProbFieldsO =
@@ -55,6 +57,7 @@ type ProbFieldsO =
   , Field SqlInt4
   , Field SqlText
   , Field SqlTimestamptz
+  , Field SqlText
   )
 
 type ProbTable = Table ProbFieldsI ProbFieldsO
@@ -64,12 +67,13 @@ serialField = optionalTableField
 
 probTable :: ProbTable
 probTable =
-  table "problems" $ p5
+  table "problems" $ p6
       ( serialField "id"
       , tableField  "name"
       , serialField "n_inputs"
       , tableField  "description"
       , serialField "submitted_at"
+      , tableField "solution_type"
       )
 
 type UserFieldsI =
@@ -131,7 +135,11 @@ withConn f = do
   liftIO (f conn)
 
 problemSelect :: Select ProbFieldsO -> DB [Problem]
-problemSelect ps = withConn $ (map (uncurryN $ Problem . ProbId) <$>) . (`runSelect` ps)
+problemSelect ps = withConn $ (map toProblem <$>) . (`runSelect` ps)
+  where toProbType = undefined
+
+toProblem :: (Int, Text, Int, Text, UTCTime, Text) -> Problem
+toProblem = uncurryN (Problem . ProbId) . over _6 (fromMaybe NumT . toJSONType)
 
 toUser :: (Int, Int, Text, Int, Int) -> User 
 toUser = uncurryN User . (_2 %~ GroupId)
@@ -154,7 +162,7 @@ matchesId a b = a .== sqlInt4 b
 
 getProbById :: ProbId -> DB (Maybe Problem)
 getProbById (ProbId p) = listToMaybe <$> problemSelect ( do
-  rows@(_probId, _, _, _, _) <- selectTable probTable
+  rows@(_probId, _, _, _, _, _) <- selectTable probTable
   _where (_probId `matchesId` p)
   pure rows
   )
@@ -180,9 +188,9 @@ addUser :: Text -> GroupId -> DB Bool
 addUser username (GroupId gid) = insertVal userTable 
   (Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)
 
-addProblem :: Text -> Text -> DB Bool
-addProblem name desc = insertVal probTable 
-  (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing)
+addProblem :: Text -> Text -> JSONType -> DB Bool
+addProblem name desc ptype = insertVal probTable 
+  (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing, sqlStrictText $ tShow ptype)
 
 addInput :: ProbId -> GroupId -> Text -> Text -> DB Bool
 addInput pid gid inpJson ans = insertVal inputTable
@@ -221,12 +229,13 @@ updateProblem :: Problem -> DB (Maybe Problem)
 updateProblem p = Just p <$ withConn (`runUpdate_` Update 
   { uTable = probTable
   , uReturning = rCount
-  , uUpdateWith = \(id, nm, ni, ds, sa) -> 
+  , uUpdateWith = \(id, nm, ni, ds, sa, st) -> 
       ( Just id
       , sqlStrictText (p ^. probName)
       , Just ni
       , sqlStrictText (p ^. probDesc)
       , Just sa
+      , st
       )
   , uWhere = (p & (view probId >>> getId >>> sqlInt4 >>> (.==))) . view _1
   })
