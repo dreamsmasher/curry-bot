@@ -33,7 +33,7 @@ import Data.Tuple.Curry (Curry, uncurryN)
 import Database.PostgreSQL.Simple (Connection)
 import Opaleye
 import Types
-import Utils (tShow)
+import Utils (tShow, compareSolutions)
 import Control.Monad.Trans.Except ( ExceptT )
 
 type DB = ReaderT Connection IO
@@ -208,8 +208,11 @@ verifySolution probId user ans = do
   maybeProb <- getProbById probId
   flip (maybe (pure False)) maybeProb $ \prb -> do
     let grp = user ^. userGroup;
+    -- this won't work if we add more inputs after a problem is released
+    -- maybe have a join table relating a user's input for a problem, to the user and problem
+    -- TODO come back to this
     inp <- nthModulo (prb ^. probInputs) (getGrp grp) <$> getInputsById probId (user ^. userGroup)
-    pure $ inp ^. answer == ans
+    pure $ compareSolutions (prb ^. probSolType) (inp ^. answer) ans
 
 updateScore :: User -> Int -> DB (Maybe Int)
 updateScore u sc = listToMaybe <$> withConn (`runUpdate_` Update 

@@ -81,16 +81,21 @@ deriveJSON defaultOptions
 is :: Eq b => (a -> b) -> b -> a -> Bool
 is f p x = f x == p
 
-toJSONType :: Text -> Maybe JSONType
-toJSONType = decode' . fromStrict . encodeUtf8 
+-- toJSONType :: Text -> Maybe JSONType
+-- toJSONType = decode' . fromStrict . encodeUtf8 
 
+-- not worth writing parsec code for
+toJSONType :: Text -> Maybe JSONType
+toJSONType "number" = Just NumT
+toJSONType "string" = Just StrT
+toJSONType s | inBrackets = Arr <$> (toJSONType . T.init . T.tail) s
+             | otherwise = Nothing
+    where inBrackets = all ($ s) [not . T.null, T.head `is` '[', T.last `is` ']']
+    
 instance FromJSON JSONType where
     parseJSON = \case
-        String "number" -> pure NumT
-        String "string" -> pure StrT
-        String s | inBrackets s -> Arr <$> parseJSON ((String . T.init . T.tail) s)
-            where inBrackets s = all ($ s) [not . T.null, T.head `is` '[', T.last `is` ']']
-        _ -> empty
+        (String s) -> maybe empty pure $ toJSONType s
+        _          -> empty
 
 instance ToJSON JSONType where
     toJSON = String . \case 
