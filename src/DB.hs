@@ -159,13 +159,14 @@ getProbById (ProbId p) = listToMaybe <$> problemSelect ( do
   pure rows
   )
 
-insertVal :: Table insRow outRow -> insRow -> DB Int64
-insertVal t row = withConn $ flip runInsert_ Insert
+insertVal :: Table insRow outRow -> insRow -> DB Bool
+insertVal t row = (0 <) <$> withConn (`runInsert_` Insert
   { iTable = t
   , iRows = [row]
   , iReturning = rCount
   , iOnConflict = Just DoNothing
   }
+  )
 
 getInputsById :: ProbId -> GroupId -> DB [Inputs]
 getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect` q))
@@ -175,15 +176,15 @@ getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect
           where_ (_probId `matchesId` p)
           pure (json, groupId, ans)
 
-addUser :: Text -> GroupId -> DB Int64
+addUser :: Text -> GroupId -> DB Bool
 addUser username (GroupId gid) = insertVal userTable 
   (Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)
 
-addProblem :: Text -> Text -> DB Int64
+addProblem :: Text -> Text -> DB Bool
 addProblem name desc = insertVal probTable 
   (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing)
 
-addInput :: ProbId -> GroupId -> Text -> Text -> DB Int64
+addInput :: ProbId -> GroupId -> Text -> Text -> DB Bool
 addInput pid gid inpJson ans = insertVal inputTable
   ( sqlInt4 . getId $ pid
   , sqlInt4 . getGrp $ gid
