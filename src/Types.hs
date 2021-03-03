@@ -16,7 +16,13 @@ import CommonModules hiding (User)
 newtype ProbId = ProbId {getId :: Int} deriving (Eq, Show, Generic)
 newtype GroupId = GroupId {getGrp :: Int} deriving (Eq, Show, Generic)
 
-data JSONType = NumT | StrT | Arr JSONType deriving (Eq, Show, Ord, Generic)
+data JSONType = NumT | StrT | Arr JSONType deriving (Eq, Ord, Generic)
+
+instance Show JSONType where
+    show = \case
+        StrT -> "string"
+        NumT -> "number"
+        Arr a -> "[" <> show a <> "]"
 
 data Problem = Problem
     { _probId      :: ProbId

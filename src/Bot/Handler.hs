@@ -57,7 +57,7 @@ messageHandler conn msg = when (sentByHuman msg) $ do
           SignupR -> signup 
       f conn msg
 
--- default show instance will drop the constructor
+-- default show instance will drop the constructor when converting to string
 fromSnowflake :: Snowflake -> Word64
 fromSnowflake (Snowflake s) = s
 
@@ -70,7 +70,6 @@ handleSubmit pid ans conn msg = do
   let fmtScore = printf "Congratulations! Your new score is %s" . tShow
       respBody = tShow $ either show fmtScore check
   respond msg respBody
-
 
 signup :: Responder ()
 signup conn msg = do

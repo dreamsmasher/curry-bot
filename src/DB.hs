@@ -26,7 +26,7 @@ import Data.Tuple.Curry (Curry, uncurryN)
 import Opaleye hiding (except)
 import Types
 import CommonModules hiding (User, userId)
-import Constants
+import Bot.Constants
 import Errors
 import Utils (tShow, compareSolutions, listToEither)
 

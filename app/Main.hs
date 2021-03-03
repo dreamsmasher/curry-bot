@@ -2,7 +2,7 @@
 
 module Main where
 
-import Commands.Handler
+import Bot.Handler
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Reader
