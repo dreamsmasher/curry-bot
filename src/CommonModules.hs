@@ -17,6 +17,7 @@ module CommonModules
 , fromMaybe
 , listToMaybe
 , encodeUtf8
+, decodeUtf8
 , bool
 , printf
 , readMaybe
@@ -35,7 +36,7 @@ import Control.Monad.Trans.Maybe hiding (liftCatch, liftListen, liftPass)
 import Discord.Internal.Types
 import Data.ByteString.Lazy ( fromStrict )
 import Data.Text ( Text (..), pack)
-import Data.Text.Encoding (encodeUtf8)
+import Data.Text.Encoding ( encodeUtf8, decodeUtf8 )
 import Data.Bool ( bool )
 import Database.PostgreSQL.Simple ( Connection (..) )
 import Data.Maybe ( fromMaybe, listToMaybe )

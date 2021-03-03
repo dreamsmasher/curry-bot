@@ -17,6 +17,7 @@ import DB
 import Utils
 import Bot.Parser
 import Bot.Types
+import Bot.Embed
 
 type DSToken = Text
 
@@ -40,6 +41,10 @@ sentByHuman = not . liftA2 (||) userIsBot userIsWebhook . messageAuthor
 respond :: Message -> Text -> DiscordHandler ()
 respond msg txt = () <$ restCall (CreateMessage (messageChannel msg) txt)
 
+respondEmbed :: Message -> (a -> CreateEmbed) -> a -> DiscordHandler () 
+respondEmbed msg f a = () <$ (restCall . CreateMessageEmbed (messageChannel msg) "" $ f a)
+
+-- use ReaderT here?
 type Responder a = Connection -> Message -> DiscordHandler a
 
 messageHandler :: Responder ()
@@ -51,7 +56,7 @@ messageHandler conn msg = when (sentByHuman msg) $ do
         f = case cmd of
           -- TODO accept user input as attachment too?
           SubmitR p t -> handleSubmit p t 
-          GetR p -> undefined
+          GetR p -> handleGet p
           NewR -> undefined
           InputR -> undefined
           SignupR -> signup 
@@ -74,9 +79,15 @@ handleSubmit pid ans conn msg = do
 signup :: Responder ()
 signup conn msg = do
   let author = messageAuthor msg 
-      uid  = U.userId author
-      gid  = genUserGroup author
+      (uid, gid) = liftA2 (,) U.userId genUserGroup author
       nope = "ERROR: You're already signed up!"
-      yep  = "Signed up, welcome to the community!"
+      yep  = "Signed up, welcome to the community!" -- tag user here?
   added <- runDB conn $ addUser (tShow uid) gid
   respond msg $ bool nope yep added
+
+handleGet :: ProbId -> Responder ()
+handleGet p conn msg = runDBErr conn (getProbById p)
+  >>= either 
+      (respond msg . tShow) -- error condition
+      (respondEmbed msg embedProblem) 
+  

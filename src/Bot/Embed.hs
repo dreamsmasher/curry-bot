@@ -12,8 +12,8 @@ import Utils
 -- embeds have a limit of 2048 characters for the description
 -- maybe split it up into chunks? 
 -- limit is 2048 chars desc, 25 * (1024 chars) fields, 2048 chars footer
-embedProblem :: Problem -> Embed
-embedProblem p = createEmbed $ def 
+embedProblem :: Problem -> CreateEmbed
+embedProblem p = def 
   { createEmbedAuthorName = botName
   , createEmbedAuthorUrl = botRepoUrl
   , createEmbedThumbnail = Nothing -- TODO make thumbnail

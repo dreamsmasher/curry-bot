@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TypeOperators #-}
+{-# LANGUAGE FlexibleContexts, TypeOperators, RankNTypes #-}
 
 module DB 
 ( DBErr (..)
@@ -133,16 +133,19 @@ toProblem :: (Int, Text, Int, Text, UTCTime, Text) -> Problem
 toProblem = uncurryN (Problem . ProbId) . over _6 (fromMaybe NumT . toJSONType)
 
 toUser :: (Int, Int, Text, Int, Int) -> User 
-toUser = uncurryN User . (_2 %~ GroupId)
+toUser = uncurryN User . (_2' %~ GroupId)
 
 userSelect :: Select UserFieldsO -> DB [User]
 userSelect us = withConn $ (map toUser <$>) . (`runSelect` us)
 
-liftSelect :: Functor m => e -> (t -> m [a]) -> t -> ExceptT e m a
-liftSelect err selector q = ExceptT $ listToEither err <$> selector q
+liftQuery :: Functor m => (a -> Either e b) -> (t -> m a) -> t -> ExceptT e m b
+liftQuery modifier selector q = ExceptT $ modifier <$> selector q
+
+firstResult :: Functor m => e -> (t -> m [a]) -> t -> ExceptT e m a
+firstResult err = liftQuery (listToEither err) 
 
 getUser :: Text -> DBErr User
-getUser usr = liftSelect UserNotFound userSelect q -- ExceptT $ listToEither UserNotFound <$> userSelect q
+getUser usr = firstResult UserNotFound userSelect q -- ExceptT $ listToEither UserNotFound <$> userSelect q
   where 
     q = do
       rows@(_, _, dsc, _, _) <- selectTable userTable
@@ -157,11 +160,10 @@ matchesId :: Column SqlInt4 -> Int -> Column SqlBool
 matchesId a b = a .== sqlInt4 b
 
 getProbById :: ProbId -> DBErr Problem
-getProbById (ProbId p) = ExceptT $ listToEither ProbNotFound <$> problemSelect ( do
+getProbById (ProbId p) = firstResult ProbNotFound problemSelect $ do
   rows@(_probId, _, _, _, _, _) <- selectTable probTable
   _where (_probId `matchesId` p)
   pure rows
-  )
 
 insertVal :: Table insRow outRow -> insRow -> DB Bool
 insertVal t row = (0 <) <$> withConn (`runInsert_` Insert
@@ -173,8 +175,9 @@ insertVal t row = (0 <) <$> withConn (`runInsert_` Insert
   )
 
 getInputsById :: ProbId -> GroupId -> DBErr [Inputs]
-getInputsById (ProbId p) (GroupId g) = ExceptT (nonEmpty <$> withConn ((map fromRow <$>) . (`runSelect` q)))
-  where fromRow = uncurryN Inputs . (_1 %~ pack) . (_2 %~ GroupId) . (_3 %~ pack)
+getInputsById (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
+  where fromRow = uncurryN Inputs . (_1' %~ pack) . (_2' %~ GroupId) . (_3' %~ pack)
+        sel q = withConn $ (map fromRow <$>) . (`runSelect` q)
         nonEmpty = \case
           [] -> Left ProbNotFound
           xs -> Right xs
@@ -213,19 +216,25 @@ verifySolution probId user ans = do
   input <- getInput <$> getInputsById probId gid 
   pure $ compareSolutions (prob ^. probSolType) (input ^. answer) ans
 
+-- update :: Update a -> DB 
+update :: forall a. Update a -> DB a
+update args = withConn (`runUpdate_` args)
+
 updateScore :: User -> Int -> DBErr Int
-updateScore u sc = ExceptT (listToEither DBError <$> withConn (`runUpdate_` uArgs))
-  where tupId     = _1 -- these have different types from the context
-        tupId'    = _1 -- TODO existentially quantify these lenses to avoid repeats
-        tupScore  = _4
-        tupScore' = _4
-        tupSolved = _5 -- tuples everywhere....
-        uArgs = Update
-          { uTable = userTable
-          , uReturning = rReturningI (view tupScore') 
-          , uUpdateWith = (tupId %~ Just) . (tupSolved %~ (+ 1)) . (tupScore %~ (fromIntegral sc +))
-          , uWhere = (sqlInt4 (u ^. userId) .==) . view tupId'
-          }
+updateScore u sc = firstResult DBError update uArgs
+  where 
+    -- these need explicit foralls in order to typecheck 
+    tupId :: forall s t a b. Field1 s t a b => Lens s t a b
+    tupId = _1'
+    tupScore :: forall s t a b. Field4 s t a b => Lens s t a b
+    tupScore  = _4'
+    tupSolved = _5'
+    uArgs = Update
+      { uTable = userTable
+      , uReturning = rReturningI (view tupScore) 
+      , uUpdateWith = (tupId %~ Just) . (tupSolved %~ (+ 1)) . (tupScore %~ (fromIntegral sc +))
+      , uWhere = (sqlInt4 (u ^. userId) .==) . view tupId
+      }
 
 markSubmission :: ProbId -> User -> Text -> DBErr Int 
 markSubmission pid user ans = do
@@ -235,7 +244,7 @@ markSubmission pid user ans = do
   else except $ Left WrongAnswer
 
 updateProblem :: Problem -> DBErr Problem
-updateProblem p = ExceptT (fromCount <$> withConn (`runUpdate_` uArgs))
+updateProblem p = liftQuery fromCount update uArgs
   where go = withConn (`runUpdate_` uArgs)
         setWith tLens pLens = tLens .~ sqlStrictText (p ^. pLens)
         uArgs = Update { uTable = probTable
@@ -248,15 +257,15 @@ updateProblem p = ExceptT (fromCount <$> withConn (`runUpdate_` uArgs))
             , Just sa
             , st
             )
-        , uWhere = (p & (view probId >>> getId >>> sqlInt4 >>> (.==))) . view _1
+        , uWhere = (p & (view probId >>> getId >>> sqlInt4 >>> (.==))) . view _1'
         }
         fromCount = \case
           0 -> Left ProbNotFound
           _ -> Right p
 
 
-runDBErr :: (MonadIO m) => r -> ExceptT e (ReaderT r IO) a -> m (Either e a)
-runDBErr conn f = liftIO $ runReaderT (runExceptT f) conn 
+runDBErr :: MonadIO m => r -> ExceptT e (ReaderT r IO) a -> m (Either e a)
+runDBErr env f = liftIO $ runReaderT (runExceptT f) env 
 
 runDB :: MonadIO m => r -> ReaderT r IO a -> m a
-runDB conn f = liftIO $ runReaderT f conn
+runDB env f = liftIO $ runReaderT f env
