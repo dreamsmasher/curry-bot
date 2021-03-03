@@ -13,14 +13,19 @@ module DB
 , getUser
 , verifySolution
 , updateScore
+, markSubmission
 ) where
 
 import Control.Lens
 import Control.Arrow
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Except 
+import Control.Monad.Trans.Class
 import Control.Monad
+import Control.Monad.Trans.Maybe
 import Errors
 import Control.Monad.Trans.Reader
+import Data.Bool (bool)
 import Data.Int (Int64)
 import Data.Functor
 import Data.Maybe
@@ -31,10 +36,10 @@ import Data.Text.Encoding (encodeUtf8)
 import Data.Time (UTCTime)
 import Data.Tuple.Curry (Curry, uncurryN)
 import Database.PostgreSQL.Simple (Connection)
-import Opaleye
+import Opaleye hiding (except)
 import Types
-import Utils (tShow, compareSolutions)
-import Control.Monad.Trans.Except ( ExceptT )
+import Constants
+import Utils (tShow, compareSolutions, listToEither)
 
 type DB = ReaderT Connection IO
 
@@ -99,7 +104,7 @@ userTable =
   table "users" $ p5
       ( serialField "id"
       , tableField  "group_id"
-      , tableField  "discord_name"
+      , tableField  "snowflake"
       , tableField  "score"
       , tableField  "solved"
       )
@@ -147,8 +152,8 @@ toUser = uncurryN User . (_2 %~ GroupId)
 userSelect :: Select UserFieldsO -> DB [User]
 userSelect us = withConn $ (map toUser <$>) . (`runSelect` us)
 
-getUser :: Text -> DB (Maybe User)
-getUser usr = listToMaybe <$> userSelect ( do
+getUser :: Text -> DB (SubmissionResult User)
+getUser usr = listToEither UserNotFound  <$> userSelect ( do
   rows@(_, _, dsc, _, _) <- selectTable userTable
   where_ (dsc .== sqlStrictText usr)
   pure rows 
@@ -184,6 +189,7 @@ getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect
           where_ (_probId `matchesId` p)
           pure (json, groupId, ans)
 
+-- worth adding errors here?
 addUser :: Text -> GroupId -> DB Bool
 addUser username (GroupId gid) = insertVal userTable 
   (Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)
@@ -203,43 +209,53 @@ addInput pid gid inpJson ans = insertVal inputTable
 nthModulo :: Int -> Int -> [a] -> a
 nthModulo len n = (!! (n `mod` len))
 
-verifySolution :: ProbId -> User -> Text -> DB Bool
-verifySolution probId user ans = do
-  maybeProb <- getProbById probId
-  flip (maybe (pure False)) maybeProb $ \prb -> do
-    let grp = user ^. userGroup;
-    -- this won't work if we add more inputs after a problem is released
-    -- maybe have a join table relating a user's input for a problem, to the user and problem
-    -- TODO come back to this
-    inp <- nthModulo (prb ^. probInputs) (getGrp grp) <$> getInputsById probId (user ^. userGroup)
-    pure $ compareSolutions (prb ^. probSolType) (inp ^. answer) ans
+verifySolution :: ProbId -> User -> Text -> DBErr Bool
+verifySolution probId user ans = lift ask >>= \conn -> do
+  prob <- maybeToExceptT ProbNotFound . MaybeT $ getProbById probId
+  let gid@(GroupId grp) = user ^. userGroup
+      getInput = nthModulo (prob ^. probInputs) grp
+      -- this won't work if we add more inputs after a problem is released
+      -- maybe have a join table relating a user's input for a problem, to the user and problem
+  input <- getInput <$> lift (getInputsById probId gid) 
+  pure $ compareSolutions (prob ^. probSolType) (input ^. answer) ans
 
-updateScore :: User -> Int -> DB (Maybe Int)
-updateScore u sc = listToMaybe <$> withConn (`runUpdate_` Update 
-  { uTable = userTable
-  , uReturning = rReturningI (view _4) 
-    -- different type from the update fields
-    -- and existentially quantifying tupScore with a forall would
-    -- require more imports
-  , uUpdateWith = (tupId %~ Just) . (tupSolved %~ (+ 1)) . (tupScore %~ (fromIntegral sc +))
-  , uWhere = (sqlInt4 (u ^. userId) .==) . view _1
-  })
-  where tupId     = _1
+updateScore :: User -> Int -> DBErr Int
+updateScore u sc = ExceptT (listToEither DBError <$> withConn (`runUpdate_` uArgs))
+  where tupId     = _1 -- these have different types from the context
+        tupId'    = _1 -- TODO existentially quantify these lenses to avoid repeats
         tupScore  = _4
+        tupScore' = _4
         tupSolved = _5 -- tuples everywhere....
+        uArgs = Update
+          { uTable = userTable
+          , uReturning = rReturningI (view tupScore') 
+          , uUpdateWith = (tupId %~ Just) . (tupSolved %~ (+ 1)) . (tupScore %~ (fromIntegral sc +))
+          , uWhere = (sqlInt4 (u ^. userId) .==) . view tupId'
+          }
 
-updateProblem :: Problem -> DB (Maybe Problem)
-updateProblem p = Just p <$ withConn (`runUpdate_` Update 
-  { uTable = probTable
-  , uReturning = rCount
-  , uUpdateWith = \(id, nm, ni, ds, sa, st) -> 
-      ( Just id
-      , sqlStrictText (p ^. probName)
-      , Just ni
-      , sqlStrictText (p ^. probDesc)
-      , Just sa
-      , st
-      )
-  , uWhere = (p & (view probId >>> getId >>> sqlInt4 >>> (.==))) . view _1
-  })
-  where setWith tLens pLens = tLens .~ sqlStrictText (p ^. pLens)
+markSubmission :: ProbId -> User -> Text -> DBErr Int 
+markSubmission pid user ans = do
+  res <- verifySolution pid user ans
+  if res then
+    updateScore user correctSolutionPts 
+  else except $ Left WrongAnswer
+
+updateProblem :: Problem -> DBErr Problem
+updateProblem p = ExceptT (fromCount <$> withConn (`runUpdate_` uArgs))
+  where go = withConn (`runUpdate_` uArgs)
+        setWith tLens pLens = tLens .~ sqlStrictText (p ^. pLens)
+        uArgs = Update { uTable = probTable
+        , uReturning = rCount
+        , uUpdateWith = \(id, nm, ni, ds, sa, st) -> 
+            ( Just id
+            , sqlStrictText (p ^. probName)
+            , Just ni
+            , sqlStrictText (p ^. probDesc)
+            , Just sa
+            , st
+            )
+        , uWhere = (p & (view probId >>> getId >>> sqlInt4 >>> (.==))) . view _1
+        }
+        fromCount = \case
+          0 -> Left ProbNotFound
+          _ -> Right p

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 75979195f8b57c4fcd6e1f145b15105f0e12d4292ee4cbf8b4f43847ed343a8d
+-- hash: 5c5a3a93807951168ea99095dd42cc7d818a06e88e0a013cc1cf423adb1d2f65
 
 name:           code-consortium-bot
 version:        0.1.0.0
@@ -31,6 +31,7 @@ library
       Commands.Parser
       Commands.TH
       Commands.Types
+      Constants
       DB
       Errors
       Lib
@@ -49,6 +50,7 @@ library
     , contravariant
     , contravariant-extras
     , discord-haskell
+    , extra
     , lens
     , mtl
     , opaleye
@@ -81,6 +83,7 @@ executable code-consortium-bot-exe
     , contravariant
     , contravariant-extras
     , discord-haskell
+    , extra
     , lens
     , mtl
     , opaleye
@@ -113,6 +116,7 @@ test-suite code-consortium-bot-test
     , contravariant
     , contravariant-extras
     , discord-haskell
+    , extra
     , lens
     , mtl
     , opaleye

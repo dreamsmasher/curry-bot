@@ -7,15 +7,16 @@ import Control.Monad
 import Control.Monad.IO.Class ( MonadIO (..), liftIO )
 import Control.Monad.Reader
 import Data.Bool (bool)
+import Control.Monad.Extra
+import Control.Monad.Trans.Maybe
 import Data.Function
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
+import Data.Word
 import Database.PostgreSQL.Simple (Connection)
 import Discord
-import Discord.Internal.Types.Channel
-import Discord.Internal.Types.Events
-import Discord.Internal.Types.Prelude
+import Discord.Internal.Types
 import Discord.Internal.Types.User as U
 import Discord.Requests
 
@@ -47,7 +48,9 @@ sentByHuman = not . liftA2 (||) userIsBot userIsWebhook . messageAuthor
 respond :: Message -> Text -> DiscordHandler ()
 respond msg txt = () <$ restCall (CreateMessage (messageChannel msg) txt)
 
-messageHandler :: Connection -> Message -> DiscordHandler ()
+type Responder a = Connection -> Message -> DiscordHandler a
+
+messageHandler :: Responder ()
 messageHandler conn msg = when (sentByHuman msg) $ do
   case parseMessage (messageText msg) of -- chances are we'll fail since every message is parsed
     Left _ -> pure ()
@@ -61,14 +64,23 @@ messageHandler conn msg = when (sentByHuman msg) $ do
           SignupR -> signup 
       f conn msg
 
+-- default show instance will drop the constructor
+fromSnowflake :: Snowflake -> Word64
+fromSnowflake (Snowflake s) = s
 
-handleSubmit :: ProbId -> Text -> Connection -> Message -> DiscordHandler ()
-handleSubmit pid ans conn msg = pure ()
+handleSubmit :: ProbId -> Text -> Responder ()
+handleSubmit pid ans conn msg = do
+  solved <- runMaybeT $ do
+    user <- MaybeT (runDB conn $ getUser (tShow . U.userId . messageAuthor $ msg))
+    pure (markSubmission pid user ans)
+  pure ()
+  -- whenJust probablyUser $ \user -> do
+  --   pure ()
 
 runDB :: MonadIO m => r -> ReaderT r IO a -> m a
 runDB conn f = liftIO $ runReaderT f conn
 
-signup :: Connection -> Message -> DiscordHandler ()
+signup :: Responder ()
 signup conn msg = do
   let author = messageAuthor msg 
       uid  = U.userId author

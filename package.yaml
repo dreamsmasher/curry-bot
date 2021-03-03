@@ -30,6 +30,7 @@ dependencies:
 - text
 - tuple
 - product-profunctors
+- extra
 - mtl
 - contravariant
 - contravariant-extras

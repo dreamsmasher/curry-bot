@@ -22,8 +22,8 @@ tShow = T.pack . show
 
 compareSolutions :: JSONType -> Text -> Text -> Bool
 compareSolutions t sol ans = fromMaybe False $ do
-    let toVal :: Text -> Maybe Value
-        toVal = decode . fromStrict . encodeUtf8
+    -- there's no direct Text -> Value function, afaik
+    let toVal = decode . fromStrict . encodeUtf8
     solVal <- toVal sol 
     ansVal <- toVal ans
     pure $ compareJSONType t ansVal && solVal == ansVal
@@ -33,7 +33,10 @@ compareJSONType (Arr a) (Array b) = all (compareJSONType a) b
 compareJSONType NumT (Number n) = True
 compareJSONType StrT (String s) = True
 compareJSONType _ _ = False
--- is all rly necessary here? 
+-- is `all` rly necessary here? 
 -- e.g. if you have Array [Number 1, String 'hello', etc], would lead to a false positive
 -- we could probably use the Eq instance for Aeson.Value, but having the expected type stored with 
 -- the problem is also pretty useful for UX
+
+listToEither :: a -> [b] -> Either a b
+listToEither a = maybe (Left a) Right  . listToMaybe

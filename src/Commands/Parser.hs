@@ -49,19 +49,18 @@ parseProbId = ProbId . read <$> many1 digit
 
 parseBotReq :: Parser BotReq
 parseBotReq = do
-    cmd <- parseCommand
+    cmd <- parseCommand <* spaces
     case cmd of
         Submit -> do
-            spaces
-            pid <- parseProbId
-            spaces
+            pid <- parseProbId <* spaces
             SubmitR pid . T.pack <$> manyTill anyChar eof
-        Get -> spaces >> parseProbId <&> GetR
+        Get -> parseProbId <&> GetR
         New -> pure NewR
         Input -> pure InputR
         Signup -> pure SignupR
         -- these two are expected to be passed in as JSON
 
 -- TODO: figure out if the constant packing/unpacking hurts performance
+-- TODO: if so, switch over to ParsecT and explicitly use Text as the `Stream s` parameter
 parseMessage :: Text -> Either ParseError BotReq
 parseMessage = parse parseBotReq "" . T.unpack
