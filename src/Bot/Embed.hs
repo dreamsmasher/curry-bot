@@ -1,0 +1,1 @@
+module Bot.Embed where

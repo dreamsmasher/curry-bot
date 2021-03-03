@@ -1,7 +1,10 @@
 {-# LANGUAGE FlexibleContexts, TypeOperators #-}
 
 module DB 
-( problemSelect
+( DBErr (..)
+, runDB
+, runDBErr
+, problemSelect 
 , userSelect
 , getAllProblems
 , matchesId
@@ -141,7 +144,6 @@ withConn f = do
 
 problemSelect :: Select ProbFieldsO -> DB [Problem]
 problemSelect ps = withConn $ (map toProblem <$>) . (`runSelect` ps)
-  where toProbType = undefined
 
 toProblem :: (Int, Text, Int, Text, UTCTime, Text) -> Problem
 toProblem = uncurryN (Problem . ProbId) . over _6 (fromMaybe NumT . toJSONType)
@@ -152,12 +154,17 @@ toUser = uncurryN User . (_2 %~ GroupId)
 userSelect :: Select UserFieldsO -> DB [User]
 userSelect us = withConn $ (map toUser <$>) . (`runSelect` us)
 
-getUser :: Text -> DB (SubmissionResult User)
-getUser usr = listToEither UserNotFound  <$> userSelect ( do
-  rows@(_, _, dsc, _, _) <- selectTable userTable
-  where_ (dsc .== sqlStrictText usr)
-  pure rows 
-  )
+liftSelect :: Functor m => e -> (t -> m [a]) -> t -> ExceptT e m a
+liftSelect err selector q = ExceptT $ listToEither err <$> selector q
+
+getUser :: Text -> DBErr User
+getUser usr = liftSelect UserNotFound userSelect q -- ExceptT $ listToEither UserNotFound <$> userSelect q
+  where 
+    q = do
+      rows@(_, _, dsc, _, _) <- selectTable userTable
+      where_ (dsc .== sqlStrictText usr)
+      pure rows 
+
 
 getAllProblems :: DB [Problem]
 getAllProblems = problemSelect (selectTable probTable)
@@ -165,8 +172,8 @@ getAllProblems = problemSelect (selectTable probTable)
 matchesId :: Column SqlInt4 -> Int -> Column SqlBool
 matchesId a b = a .== sqlInt4 b
 
-getProbById :: ProbId -> DB (Maybe Problem)
-getProbById (ProbId p) = listToMaybe <$> problemSelect ( do
+getProbById :: ProbId -> DBErr Problem
+getProbById (ProbId p) = ExceptT $ listToEither ProbNotFound <$> problemSelect ( do
   rows@(_probId, _, _, _, _, _) <- selectTable probTable
   _where (_probId `matchesId` p)
   pure rows
@@ -181,9 +188,12 @@ insertVal t row = (0 <) <$> withConn (`runInsert_` Insert
   }
   )
 
-getInputsById :: ProbId -> GroupId -> DB [Inputs]
-getInputsById (ProbId p) (GroupId g) = withConn ((map fromRow <$>) . (`runSelect` q))
+getInputsById :: ProbId -> GroupId -> DBErr [Inputs]
+getInputsById (ProbId p) (GroupId g) = ExceptT (nonEmpty <$> withConn ((map fromRow <$>) . (`runSelect` q)))
   where fromRow = uncurryN Inputs . (_1 %~ pack) . (_2 %~ GroupId) . (_3 %~ pack)
+        nonEmpty = \case
+          [] -> Left ProbNotFound
+          xs -> Right xs
         q = do
           rows@(_probId, groupId, json, ans) <- selectTable inputTable
           where_ (_probId `matchesId` p)
@@ -210,13 +220,13 @@ nthModulo :: Int -> Int -> [a] -> a
 nthModulo len n = (!! (n `mod` len))
 
 verifySolution :: ProbId -> User -> Text -> DBErr Bool
-verifySolution probId user ans = lift ask >>= \conn -> do
-  prob <- maybeToExceptT ProbNotFound . MaybeT $ getProbById probId
+verifySolution probId user ans = do
+  prob <- getProbById probId
   let gid@(GroupId grp) = user ^. userGroup
       getInput = nthModulo (prob ^. probInputs) grp
       -- this won't work if we add more inputs after a problem is released
       -- maybe have a join table relating a user's input for a problem, to the user and problem
-  input <- getInput <$> lift (getInputsById probId gid) 
+  input <- getInput <$> getInputsById probId gid 
   pure $ compareSolutions (prob ^. probSolType) (input ^. answer) ans
 
 updateScore :: User -> Int -> DBErr Int
@@ -259,3 +269,10 @@ updateProblem p = ExceptT (fromCount <$> withConn (`runUpdate_` uArgs))
         fromCount = \case
           0 -> Left ProbNotFound
           _ -> Right p
+
+
+runDBErr :: (MonadIO m) => r -> ExceptT e (ReaderT r IO) a -> m (Either e a)
+runDBErr conn f = liftIO $ runReaderT (runExceptT f) conn 
+
+runDB :: MonadIO m => r -> ReaderT r IO a -> m a
+runDB conn f = liftIO $ runReaderT f conn

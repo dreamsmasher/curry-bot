@@ -1,13 +1,16 @@
 {-# LANGUAGE BlockArguments #-}
-module Commands.Handler where
+module Bot.Handler where
 
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
 import Control.Monad.IO.Class ( MonadIO (..), liftIO )
-import Control.Monad.Reader
+import Control.Monad.Trans.Except 
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Class
 import Data.Bool (bool)
 import Control.Monad.Extra
+import Text.Printf ( printf )
 import Control.Monad.Trans.Maybe
 import Data.Function
 import Data.Text (Text)
@@ -21,10 +24,11 @@ import Discord.Internal.Types.User as U
 import Discord.Requests
 
 import Types
+import Errors
 import DB
 import Utils
-import Commands.Parser
-import Commands.Types
+import Bot.Parser
+import Bot.Types
 
 type DSToken = Text
 
@@ -57,6 +61,7 @@ messageHandler conn msg = when (sentByHuman msg) $ do
     Right cmd -> do
       let 
         f = case cmd of
+          -- TODO accept user input as attachment too?
           SubmitR p t -> handleSubmit p t 
           GetR p -> undefined
           NewR -> undefined
@@ -70,15 +75,14 @@ fromSnowflake (Snowflake s) = s
 
 handleSubmit :: ProbId -> Text -> Responder ()
 handleSubmit pid ans conn msg = do
-  solved <- runMaybeT $ do
-    user <- MaybeT (runDB conn $ getUser (tShow . U.userId . messageAuthor $ msg))
-    pure (markSubmission pid user ans)
-  pure ()
-  -- whenJust probablyUser $ \user -> do
-  --   pure ()
+  check <- runDBErr conn $ do
+    user <- getUser (tShow . U.userId $ messageAuthor msg)
+    markSubmission pid user ans
 
-runDB :: MonadIO m => r -> ReaderT r IO a -> m a
-runDB conn f = liftIO $ runReaderT f conn
+  let fmtScore = printf "Congratulations! Your new score is %s" . tShow
+      respBody = tShow $ either show fmtScore check
+  respond msg respBody
+
 
 signup :: Responder ()
 signup conn msg = do

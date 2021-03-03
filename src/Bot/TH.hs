@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Commands.TH where
+module Bot.TH where
 
-import Commands.Types
+import Bot.Types
 import Data.Char (toLower)
 import Language.Haskell.TH.Syntax (lift)
 import Text.Parsec

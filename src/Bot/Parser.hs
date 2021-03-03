@@ -1,17 +1,17 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Commands.Parser where
+module Bot.Parser where
 
 -- import Text.Parsec
 import Text.ParserCombinators.Parsec 
 import Data.Text qualified as T
 import Data.Text (Text)
 import Data.Char (toLower, toUpper, chr, ord)
-import Commands.Types
+import Bot.Types
 import Types
 import Data.Maybe
 import Data.Aeson
 
-import Commands.TH
+import Bot.TH
 
 import Data.Functor
 import Discord.Internal.Types.Channel (Message, Attachment)
