@@ -36,6 +36,7 @@ dependencies:
 - contravariant-extras
 - time
 - lens
+- req
 - template-haskell
 - postgresql-simple
 - aeson

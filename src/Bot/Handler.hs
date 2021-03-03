@@ -58,7 +58,7 @@ messageHandler conn msg = when (sentByHuman msg) $ do
           SubmitR p t -> handleSubmit p t 
           GetR p -> handleGet p
           NewR -> undefined
-          InputR -> undefined
+          InputR -> handleInput
           SignupR -> signup 
       f conn msg
 
@@ -71,9 +71,9 @@ handleSubmit pid ans conn msg = do
   check <- runDBErr conn $ do
     user <- getUser (tShow . U.userId $ messageAuthor msg)
     markSubmission pid user ans
-
-  let fmtScore = printf "Congratulations! Your new score is %s" . tShow
-      respBody = tShow $ either show fmtScore check
+  let 
+    fmtScore = printf "Congratulations! Your new score is %d" 
+    respBody = tShow $ either show fmtScore check
   respond msg respBody
 
 signup :: Responder ()
@@ -91,3 +91,5 @@ handleGet p conn msg = runDBErr conn (getProbById p)
       (respond msg . tShow) -- error condition
       (respondEmbed msg embedProblem) 
   
+handleInput :: Responder ()
+handleInput conn msg = pure ()

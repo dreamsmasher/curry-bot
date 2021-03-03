@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TypeOperators, RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, RankNTypes #-}
 
 module DB 
 ( DBErr (..)
@@ -33,6 +33,15 @@ import Utils (tShow, compareSolutions, listToEither)
 type DB = ReaderT Connection IO
 
 type DBErr = ExceptT SubmissionError DB
+
+-- |Given a database connection and action, run the action in any MonadIO context.
+runDB :: MonadIO m => r -> ReaderT r IO a -> m a
+runDB env = liftIO . (`runReaderT` env)
+
+-- |Given a database connection and action that can fail (e.g. looking up by ID), run the action
+-- in any MonadIO context, returning an Either type. Generally these actions have the form ExceptT SubmissionError (ReaderT Connection IO).
+runDBErr :: MonadIO m => r -> ExceptT e (ReaderT r IO) a -> m (Either e a)
+runDBErr env = runDB env . runExceptT 
 
 type ProbFieldsI =
   ( Maybe (Field SqlInt4)
@@ -141,17 +150,17 @@ userSelect us = withConn $ (map toUser <$>) . (`runSelect` us)
 liftQuery :: Functor m => (a -> Either e b) -> (t -> m a) -> t -> ExceptT e m b
 liftQuery modifier selector q = ExceptT $ modifier <$> selector q
 
-firstResult :: Functor m => e -> (t -> m [a]) -> t -> ExceptT e m a
-firstResult err = liftQuery (listToEither err) 
+runQueryOr :: Functor m => e -> (t -> m [a]) -> t -> ExceptT e m a
+runQueryOr err = liftQuery (listToEither err) 
 
 getUser :: Text -> DBErr User
-getUser usr = firstResult UserNotFound userSelect q -- ExceptT $ listToEither UserNotFound <$> userSelect q
+getUser usr = runQueryOr UserNotFound userSelect q 
   where 
     q = do
-      rows@(_, _, dsc, _, _) <- selectTable userTable
+      rows <- selectTable userTable
+      let dsc = view _3 rows
       where_ (dsc .== sqlStrictText usr)
       pure rows 
-
 
 getAllProblems :: DB [Problem]
 getAllProblems = problemSelect (selectTable probTable)
@@ -160,19 +169,20 @@ matchesId :: Column SqlInt4 -> Int -> Column SqlBool
 matchesId a b = a .== sqlInt4 b
 
 getProbById :: ProbId -> DBErr Problem
-getProbById (ProbId p) = firstResult ProbNotFound problemSelect $ do
-  rows@(_probId, _, _, _, _, _) <- selectTable probTable
-  _where (_probId `matchesId` p)
+getProbById (ProbId p) = runQueryOr ProbNotFound problemSelect $ do
+  rows <- selectTable probTable
+  let probId = view _1 rows
+  _where $ probId `matchesId` p
   pure rows
 
-insertVal :: Table insRow outRow -> insRow -> DB Bool
-insertVal t row = (0 <) <$> withConn (`runInsert_` Insert
-  { iTable = t
-  , iRows = [row]
-  , iReturning = rCount
-  , iOnConflict = Just DoNothing
-  }
-  )
+insertVal :: Table inRow outRow -> inRow -> DB Bool
+insertVal t row = (0 <) <$> withConn (`runInsert_` i)
+  where i = Insert 
+    { iTable = t
+    , iRows = [row]
+    , iReturning = rCount
+    , iOnConflict = Just DoNothing
+    }
 
 getInputsById :: ProbId -> GroupId -> DBErr [Inputs]
 getInputsById (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
@@ -182,8 +192,8 @@ getInputsById (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
           [] -> Left ProbNotFound
           xs -> Right xs
         q = do
-          rows@(_probId, groupId, json, ans) <- selectTable inputTable
-          where_ (_probId `matchesId` p)
+          rows@(probId, groupId, json, ans) <- selectTable inputTable
+          where_ (probId `matchesId` p)
           pure (json, groupId, ans)
 
 -- worth adding errors here?
@@ -221,7 +231,7 @@ update :: forall a. Update a -> DB a
 update args = withConn (`runUpdate_` args)
 
 updateScore :: User -> Int -> DBErr Int
-updateScore u sc = firstResult DBError update uArgs
+updateScore u sc = runQueryOr DBError update uArgs
   where 
     -- these need explicit foralls in order to typecheck 
     tupId :: forall s t a b. Field1 s t a b => Lens s t a b
@@ -262,10 +272,3 @@ updateProblem p = liftQuery fromCount update uArgs
         fromCount = \case
           0 -> Left ProbNotFound
           _ -> Right p
-
-
-runDBErr :: MonadIO m => r -> ExceptT e (ReaderT r IO) a -> m (Either e a)
-runDBErr env f = liftIO $ runReaderT (runExceptT f) env 
-
-runDB :: MonadIO m => r -> ReaderT r IO a -> m a
-runDB env f = liftIO $ runReaderT f env
