@@ -1,28 +1,16 @@
 {-# LANGUAGE BlockArguments #-}
 module Bot.Handler where
 
-import Control.Applicative
-import Control.Arrow
-import Control.Monad
-import Control.Monad.IO.Class ( MonadIO (..), liftIO )
-import Control.Monad.Trans.Except 
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Class
-import Data.Bool (bool)
 import Control.Monad.Extra
-import Text.Printf ( printf )
-import Control.Monad.Trans.Maybe
 import Data.Function
-import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Word
-import Database.PostgreSQL.Simple (Connection)
 import Discord
-import Discord.Internal.Types
 import Discord.Internal.Types.User as U
 import Discord.Requests
 
+import CommonModules
 import Types
 import Errors
 import DB

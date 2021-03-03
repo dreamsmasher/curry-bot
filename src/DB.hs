@@ -19,36 +19,20 @@ module DB
 , markSubmission
 ) where
 
-import Control.Lens
-import Control.Arrow
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Except 
-import Control.Monad.Trans.Class
-import Control.Monad
-import Control.Monad.Trans.Maybe
-import Errors
-import Control.Monad.Trans.Reader
-import Data.Bool (bool)
 import Data.Int (Int64)
-import Data.Functor
-import Data.Maybe
 import Data.Profunctor.Product
 import Data.Profunctor 
-import Data.Text (Text, pack)
-import Data.Text.Encoding (encodeUtf8)
-import Data.Time (UTCTime)
 import Data.Tuple.Curry (Curry, uncurryN)
-import Database.PostgreSQL.Simple (Connection)
 import Opaleye hiding (except)
 import Types
+import CommonModules hiding (User, userId)
 import Constants
+import Errors
 import Utils (tShow, compareSolutions, listToEither)
 
 type DB = ReaderT Connection IO
 
 type DBErr = ExceptT SubmissionError DB
-
-type ContrJoin a = Table a a
 
 type ProbFieldsI =
   ( Maybe (Field SqlInt4)

@@ -1,15 +1,10 @@
 {-# LANGUAGE OverloadedLists #-}
 module Utils where
 
-import Control.Applicative (liftA2, empty)
-import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.Encoding (encodeUtf8)
-import Data.Maybe
-import Text.Read (readMaybe)
-import Data.ByteString.Lazy (fromStrict)
 import Discord.Internal.Types.User qualified as U
 import Types
+import CommonModules
 import Data.Aeson
 
 -- TODO make this less garbage

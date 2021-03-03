@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs #-}
-module Commands.Types where
+module Bot.Types where
 
 import Types
 import Data.Text ( Text )

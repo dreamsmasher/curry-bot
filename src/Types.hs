@@ -2,24 +2,16 @@
 
 module Types where
 
-import Data.Text ( Text )
 import Data.Text qualified as T
-import Data.Text.Encoding (encodeUtf8)
-import Data.Time ( UTCTime )
 import Data.ByteString.Lazy (fromStrict)
-import Control.Monad.Trans.Reader
-import Control.Applicative (liftA2, empty)
 import Control.Lens.TH
 import GHC.Generics
-import Database.PostgreSQL.Simple ( Connection )
 import Data.Aeson.TH
     ( deriveJSON,
       defaultOptions,
       Options(fieldLabelModifier, constructorTagModifier) )
 import Data.Aeson (FromJSON (..), ToJSON (..), genericToEncoding, Value (..), decode')
-
--- represents a function that takes a DB connection
-
+import CommonModules hiding (User)
 
 newtype ProbId = ProbId {getId :: Int} deriving (Eq, Show, Generic)
 newtype GroupId = GroupId {getGrp :: Int} deriving (Eq, Show, Generic)
