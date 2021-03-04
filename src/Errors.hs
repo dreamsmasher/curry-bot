@@ -3,6 +3,7 @@ module Errors where
 import GHC.Generics ( Generic )
 import Types
 import CommonModules
+import Control.Monad.Trans.Class
 import Bot.Constants
 import Bot.TH (maxSubmissionErrorStr)
 import Network.HTTP.Req
@@ -46,6 +47,7 @@ newtype SubHandler a = SubHandler {runSubHandler :: ExceptT SubmissionError IO a
              , MonadThrow
              , MonadCatch
              , MonadIO
+             , MonadFail
              )
 
 instance MonadHttp SubHandler where            
@@ -53,5 +55,12 @@ instance MonadHttp SubHandler where
 
 throwS :: SubmissionError -> SubHandler a
 catchS :: ExceptT e IO a -> (e -> ExceptT SubmissionError IO a) -> SubHandler a
+exceptS :: Either SubmissionError a -> SubHandler a
+
 throwS = SubHandler . throwE
 catchS e = SubHandler . catchE e
+exceptS = SubHandler . except
+
+runSubmit :: SubHandler a -> IO (Either SubmissionError a)
+runSubmit = runExceptT . runSubHandler
+

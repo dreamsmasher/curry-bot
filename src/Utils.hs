@@ -1,9 +1,19 @@
 {-# LANGUAGE OverloadedLists, FlexibleInstances, UndecidableInstances #-}
-module Utils where
+module Utils 
+( TShow (..)
+, genUserGroup
+, compareSolutions
+, compareJSONType
+, listToEither
+, assertCond
+, assertCondS
+, liftMaybe
+)where
 
 import Data.Text qualified as T
 import Discord.Internal.Types.User qualified as U
 import Types
+import Errors 
 import CommonModules
 import Data.Aeson
 import Data.ByteString qualified as B
@@ -58,8 +68,15 @@ instance  TShow BL.ByteString where
 instance  TShow [Char] where
     tShow = pack
 
+_assertCond :: Applicative f => (t -> f ()) -> t -> (a -> Bool) -> a -> f ()
+_assertCond thrower err test = bool (thrower err) (pure ()) . test
+
 assertCond :: Monad m => e -> (a -> Bool) -> a -> ExceptT e m ()
-assertCond err pred = bool (throwE err) (pure ()) . pred
+assertCond = _assertCond throwE
+
+-- this should probably be in Errors, but that would mean export _assertCond
+assertCondS :: SubmissionError -> (a -> Bool) -> a -> SubHandler ()
+assertCondS = _assertCond throwS
 
 liftMaybe :: (Monad m) => e -> Maybe a -> ExceptT e m a
 liftMaybe e = maybeToExceptT e . MaybeT . pure
