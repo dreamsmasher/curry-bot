@@ -64,7 +64,7 @@ messageHandler conn msg = when (sentByHuman msg) $ do
           -- TODO accept user input as attachment too?
           SubmitR p t -> handleSubmit p t
           GetR p -> handleGet p
-          NewR -> undefined -- TODO last unimplemented handler
+          NewR -> handleNew 
           InputR -> handleInput
           SignupR -> signup 
       f conn msg
@@ -82,15 +82,15 @@ handleSubmit pid ans conn msg = do
 
     we go from 
       (ExceptT SubmissionError (ReaderT Connection IO) a)
-        <runExceptT> ->
+        <runExceptT>->
         (ReaderT Connection IO (Either SubmissionError a))
-          <`runReaderT` conn> ->
+          <`runReaderT` conn>->
           (IO (Either SubmissionError a))
-          <liftIO> ->
+          <liftIO>->
             ((MonadIO m) => m (Either SubmissionError a))
-          <ExceptT> ->
+          <ExceptT>->
           (ExceptT SubmissionError IO a)
-        <SubHandler> ->
+        <SubHandler>->
         (SubHandler (ExceptT SubmissionError IO a)) 
     
     altogether 5 monad transformations in a single line, within ReaderT DiscordHandle IO
@@ -107,10 +107,9 @@ handleSubmit pid ans conn msg = do
 signup :: Responder ()
 signup conn msg = do
   let author = messageAuthor msg 
-      (uid, gid) = liftA2 (,) U.userId genUserGroup author
       nope = "Error: You're already signed up!"
       yep  = "Signed up, welcome to the community!" -- tag user here?
-  added <- runDB conn $ addUser (tShow uid) gid
+  added <- runDB conn $ (addUser . tShow . U.userId <*> genUserGroup) author
   respond msg $ bool nope yep added
 
 handleGet :: ProbId -> Responder ()
@@ -120,8 +119,12 @@ handleGet p conn msg =
       (respond msg . tShow) -- error condition
       (respondEmbed msg embedProblem) 
   
+-- TODO finish these handlers!!!
 handleInput :: Responder ()
-handleInput conn msg = pure ()
+handleInput conn msg = error "UNIMPLEMENTED: handleInput"
+
+handleNew :: Responder ()
+handleNew conn msg = error "UNIMPLEMENTED: handleNew"
 
 fromUserSub :: (FromJSON j) => Text -> Message -> SubHandler j
 fromUserSub ans = 
@@ -143,7 +146,7 @@ fetchAttachment url = req GET url NoReqBody bsResponse
 getAttachment :: Message -> SubHandler ByteString
 getAttachment msg = do
   attach <- exceptS . listToEither NoInput $ messageAttachments msg
-  assertCondS ChonkyInput ((maxSubmissionSize >=) . attachmentSize) attach
+  assertCondS ChonkyInput $ maxSubmissionSize >= attachmentSize attach 
   -- TODO ambiguous type variables, figure out how to use TypeApplications here
   let fromErr :: SubmissionError -> ParseException -> SubHandler a
       fromErr s = const (throwS s)

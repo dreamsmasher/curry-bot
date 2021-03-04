@@ -68,14 +68,14 @@ instance  TShow BL.ByteString where
 instance  TShow [Char] where
     tShow = pack
 
-_assertCond :: Applicative f => (t -> f ()) -> t -> (a -> Bool) -> a -> f ()
-_assertCond thrower err test = bool (thrower err) (pure ()) . test
+_assertCond :: Applicative f => (t -> f ()) -> t -> Bool -> f ()
+_assertCond thrower err = bool (thrower err) (pure ()) 
 
-assertCond :: Monad m => e -> (a -> Bool) -> a -> ExceptT e m ()
+assertCond :: Monad m => e -> Bool -> ExceptT e m ()
 assertCond = _assertCond throwE
 
 -- this should probably be in Errors, but that would mean export _assertCond
-assertCondS :: SubmissionError -> (a -> Bool) -> a -> SubHandler ()
+assertCondS :: SubmissionError -> Bool -> SubHandler ()
 assertCondS = _assertCond throwS
 
 liftMaybe :: (Monad m) => e -> Maybe a -> ExceptT e m a
