@@ -2,7 +2,9 @@
 module Bot.Handler where
 
 import Control.Monad.Extra
+import Data.Aeson (decodeStrict, Value (..))
 import Data.Function
+import Data.ByteString
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Bifunctor (bimap, first)
@@ -91,7 +93,8 @@ signup conn msg = do
   respond msg $ bool nope yep added
 
 handleGet :: ProbId -> Responder ()
-handleGet p conn msg = runDBErr conn (getProbById p)
+handleGet p conn msg = 
+  runDBErr conn (getProbById p)
   >>= either 
       (respond msg . tShow) -- error condition
       (respondEmbed msg embedProblem) 
@@ -99,48 +102,53 @@ handleGet p conn msg = runDBErr conn (getProbById p)
 handleInput :: Responder ()
 handleInput conn msg = pure ()
 
+fromUserSub :: (FromJSON j) => BotReq -> Message -> SubHandler j
+fromUserSub cmd = 
+  getMsgInput cmd 
+  >=> decodeStrict >>> liftMaybe InvalidInput >>> SubHandler
+
 -- flip these args?
-getMsgInput :: BotReq -> Message -> SubHandler Text
+getMsgInput :: BotReq -> Message -> SubHandler ByteString
 getMsgInput cmd msg 
-  | takesAttachment cmd = maybe (getAttachment msg) pure $ getInlineData cmd
+  | takesAttachment cmd = maybe (getAttachment msg) (pure . encodeUtf8) $ getInlineData cmd
   | otherwise = throwS NoInput
+
+
+liftMaybeS :: SubmissionError -> Maybe a -> SubHandler a
+liftMaybeS e = SubHandler . liftMaybe e
+
+-- TODO figure out if fetching the files will actually return decodable JSON
+fetchAttachment :: MonadHttp m => Url a -> Option a -> m BsResponse
+fetchAttachment url = req GET url NoReqBody bsResponse
+
+getAttachment :: Message -> SubHandler ByteString
+getAttachment msg = do
+  attach <- exceptS . listToEither NoInput $ messageAttachments msg
+  assertCondS ChonkyInput ((maxSubmissionSize >=) . attachmentSize) attach
+  -- TODO ambiguous type variables, figure out how to use TypeApplications here
+  let fromErr :: SubmissionError -> ParseException -> SubHandler a
+      fromErr s = const (throwS s)
+  parsed <- mkURI (attachmentUrl attach) `catch` fromErr InvalidInput
+  urlOpts <- liftMaybeS InvalidInput (useHttpURI parsed)
+  -- runReq throws exceptions in rare situations, TODO figure out if it's worth trying to handle these
+  -- if we can't contact discord this way, then we can't contact discord thru websockets
+  resp <- runReq defaultHttpConfig (uncurry fetchAttachment urlOpts)
+            `catch` handleHttpException
+  pure $ responseBody resp
+
+-- TODO delete these tests before deploy
+f :: SubHandler Value
+f = fromUserSub (SubmitR (ProbId 123) "") dmt
+
+test :: IO ()
+test = do
+  z <- print "hi"
+  res <- runExceptT . runSubHandler $ f
+  print res
+  pure ()
 
 dummyMsg t a = Message 0 0 dummyUsr t tme Nothing False False [] [] (maybeToList a) [] [] Nothing False Nothing
   where tme = read "2021-03-04 00:45:41.091531966 UTC"
 dummyUsr = U.User 0 "" "" Nothing False False Nothing Nothing Nothing
 
-dmt = dummyMsg "" . Just $ Attachment 0 "file.txt" 2048 "https://nliu.net/secret" "" Nothing Nothing
-
-liftMaybeS :: SubmissionError -> Maybe a -> SubHandler a
-liftMaybeS e = SubHandler . liftMaybe e
-
-fetchAttachment :: MonadHttp m => Url a -> Option a -> m BsResponse
-fetchAttachment url = req GET url NoReqBody bsResponse
-
-getAttachment :: Message -> SubHandler Text
-getAttachment msg = do
-  attach <- exceptS . listToEither NoInput $ messageAttachments msg
-  runExceptT $ assertCond ChonkyInput ((maxSubmissionSize >=) . attachmentSize) attach
-  -- TODO ambiguous type variables, figure out how to use TypeApplications here
-  let fromErr :: SubmissionError -> ParseException -> SubHandler a
-      fromErr s = const (throwS s)
-  parsed <- mkURI (attachmentUrl attach) `catch` fromErr InvalidInput
-  urlOpts <- liftMaybeS InvalidInput (useHttpsURI parsed)
-  -- runReq throws exceptions in rare situations, TODO figure out if it's worth trying to handle these
-  -- if we can't contact discord this way, then we can't contact discord thru websockets
-
-  -- update: even after lifting into a newtype, exceptions still fall through
-  resp <- runReq defaultHttpConfig (uncurry fetchAttachment urlOpts)
-            `catch` handleHttpException -- fromErr (NetworkError "your message attachment")
-  pure . decodeUtf8 $ responseBody resp
-  -- liftIO $ print parsed
-
-  -- pure ""
-  -- req GET url NoReqBody bsResponse mempty
-
-test :: IO ()
-test = do
-  z <- print "hi"
-  res <- runExceptT . runSubHandler $ getAttachment dmt
-  print res
-  pure ()
+dmt = dummyMsg "" . Just $ Attachment 0 "file.txt" 20048 "http://api.nliu.net/rants" "" Nothing Nothing

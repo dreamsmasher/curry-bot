@@ -2,7 +2,9 @@
 module Bot.Types where
 
 import Types
-import Data.Text ( Text )
+import Data.Text qualified as T
+import CommonModules
+
 -- no camelcase here, 
 -- because the parsers depend on the string representations of these type constructors
 data BotCmd = Submit 
@@ -26,9 +28,11 @@ takesAttachment = \case
     NewR        -> True 
     _           -> False
 
--- expand as needed
+-- expand definitions as needed
 -- |Given a bot request, returns the inline data from the originating message if it exists
 getInlineData :: BotReq -> Maybe Text
 getInlineData = \case
-    SubmitR _ t -> Just t
+    SubmitR _ t -> bool Nothing (Just t) $ not (T.null t)
+    --   | not $ T.null t -> Just t
+    --   | otherwise = Nothing
     _           -> Nothing
