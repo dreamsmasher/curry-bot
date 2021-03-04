@@ -93,11 +93,11 @@ handleSubmit pid ans conn msg = do
         <SubHandler> ->
         (SubHandler (ExceptT SubmissionError IO a)) 
     
-    altogether 5 monad transformations in a single line
+    altogether 5 monad transformations in a single line, within ReaderT DiscordHandle IO
     zero runtime cost, though :)
     -}
     liftSubmit . runDBErr conn $ do
-      user <- getUser (tShow . U.userId $ messageAuthor msg)
+      user <- getUser . tShow . U.userId $ messageAuthor msg
       markSubmission pid user ans'
   let 
     fmtScore = printf "Congratulations! Your new score is %d" 

@@ -102,3 +102,4 @@ instance ToJSON JSONType where
         Arr x -> -- since Value is not a functor
             let (String x') = toJSON x
              in "[" <> x' <> "]"
+
