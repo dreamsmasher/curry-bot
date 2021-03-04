@@ -10,17 +10,17 @@ import Network.HTTP.Req
 import Control.Monad.Catch ( Exception, MonadCatch, MonadThrow )
 
 -- using GADTs so these are more extensible in the future
-data SubmissionError where
-    UserNotFound :: SubmissionError
-    DoubleSignup :: SubmissionError
-    InvalidInput :: SubmissionError
-    NoInput      :: SubmissionError
-    ProbNotFound :: SubmissionError
-    TypeMisMatch :: JSONType -> SubmissionError
-    DBError      :: SubmissionError 
-    NetworkError :: Text -> SubmissionError
-    WrongAnswer  :: SubmissionError
-    ChonkyInput  :: SubmissionError
+data SubmissionError 
+    = UserNotFound  
+    | DoubleSignup 
+    | InvalidInput 
+    | NoInput     
+    | ProbNotFound 
+    | TypeMisMatch JSONType 
+    | DBError      
+    | NetworkError Text 
+    | WrongAnswer  
+    | ChonkyInput  
     deriving (Eq, Generic)
 
 instance Show SubmissionError where
