@@ -16,6 +16,7 @@ module CommonModules
 , pack
 , fromMaybe
 , listToMaybe
+, maybeToList 
 , encodeUtf8
 , decodeUtf8
 , bool
@@ -39,7 +40,7 @@ import Data.Text ( Text (..), pack)
 import Data.Text.Encoding ( encodeUtf8, decodeUtf8 )
 import Data.Bool ( bool )
 import Database.PostgreSQL.Simple ( Connection (..) )
-import Data.Maybe ( fromMaybe, listToMaybe )
+import Data.Maybe ( fromMaybe, listToMaybe, maybeToList )
 import Text.Printf ( printf )
 import Text.Read (readMaybe)
 import Data.Functor

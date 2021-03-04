@@ -58,3 +58,8 @@ instance  TShow BL.ByteString where
 instance  TShow [Char] where
     tShow = pack
 
+assertCond :: Monad m => e -> (a -> Bool) -> a -> ExceptT e m ()
+assertCond err pred = bool (throwE err) (pure ()) . pred
+
+liftMaybe :: (Monad m) => e -> Maybe a -> ExceptT e m a
+liftMaybe e = maybeToExceptT e . MaybeT . pure

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bb27a584da1fec6b276f542b6d089b8dad69c04458c45a13efdefe99b004a640
+-- hash: 9efa0e4ad74ded54c938d13879e9448bbdfad24cc643651875417bf7fb225967
 
 name:           code-consortium-bot
 version:        0.1.0.0
@@ -52,8 +52,10 @@ library
     , contravariant
     , contravariant-extras
     , discord-haskell
+    , exceptions
     , extra
     , lens
+    , modern-uri
     , mtl
     , opaleye
     , parsec
@@ -86,8 +88,10 @@ executable code-consortium-bot-exe
     , contravariant
     , contravariant-extras
     , discord-haskell
+    , exceptions
     , extra
     , lens
+    , modern-uri
     , mtl
     , opaleye
     , parsec
@@ -120,8 +124,10 @@ test-suite code-consortium-bot-test
     , contravariant
     , contravariant-extras
     , discord-haskell
+    , exceptions
     , extra
     , lens
+    , modern-uri
     , mtl
     , opaleye
     , parsec

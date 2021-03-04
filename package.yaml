@@ -24,6 +24,7 @@ dependencies:
 - transformers
 - containers
 - parsec
+- exceptions
 - discord-haskell
 - opaleye
 - bytestring
@@ -36,6 +37,7 @@ dependencies:
 - contravariant-extras
 - time
 - lens
+- modern-uri
 - req
 - template-haskell
 - postgresql-simple

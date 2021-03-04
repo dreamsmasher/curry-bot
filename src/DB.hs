@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleContexts, RankNTypes #-}
 
-module DB 
+module DB
 ( DBErr (..)
 , runDB
 , runDBErr
-, problemSelect 
+, problemSelect
 , userSelect
 , getAllProblems
 , matchesId
@@ -21,7 +21,7 @@ module DB
 
 import Data.Int (Int64)
 import Data.Profunctor.Product
-import Data.Profunctor 
+import Data.Profunctor
 import Data.Tuple.Curry (Curry, uncurryN)
 import Opaleye hiding (except)
 import Types
@@ -41,7 +41,7 @@ runDB env = liftIO . (`runReaderT` env)
 -- |Given a database connection and action that can fail (e.g. looking up by ID), run the action
 -- in any MonadIO context, returning an Either type. Generally these actions have the form ExceptT SubmissionError (ReaderT Connection IO).
 runDBErr :: MonadIO m => r -> ExceptT e (ReaderT r IO) a -> m (Either e a)
-runDBErr env = runDB env . runExceptT 
+runDBErr env = runDB env . runExceptT
 
 type ProbFieldsI =
   ( Maybe (Field SqlInt4)
@@ -141,7 +141,7 @@ problemSelect ps = withConn $ (map toProblem <$>) . (`runSelect` ps)
 toProblem :: (Int, Text, Int, Text, UTCTime, Text) -> Problem
 toProblem = uncurryN (Problem . ProbId) . over _6 (fromMaybe NumT . toJSONType)
 
-toUser :: (Int, Int, Text, Int, Int) -> User 
+toUser :: (Int, Int, Text, Int, Int) -> User
 toUser = uncurryN User . (_2' %~ GroupId)
 
 userSelect :: Select UserFieldsO -> DB [User]
@@ -151,16 +151,16 @@ liftQuery :: Functor m => (a -> Either e b) -> (t -> m a) -> t -> ExceptT e m b
 liftQuery modifier selector q = ExceptT $ modifier <$> selector q
 
 runQueryOr :: Functor m => e -> (t -> m [a]) -> t -> ExceptT e m a
-runQueryOr err = liftQuery (listToEither err) 
+runQueryOr err = liftQuery (listToEither err)
 
 getUser :: Text -> DBErr User
-getUser usr = runQueryOr UserNotFound userSelect q 
-  where 
+getUser usr = runQueryOr UserNotFound userSelect q
+  where
     q = do
       rows <- selectTable userTable
       let dsc = view _3 rows
       where_ (dsc .== sqlStrictText usr)
-      pure rows 
+      pure rows
 
 getAllProblems :: DB [Problem]
 getAllProblems = problemSelect (selectTable probTable)
@@ -177,12 +177,13 @@ getProbById (ProbId p) = runQueryOr ProbNotFound problemSelect $ do
 
 insertVal :: Table inRow outRow -> inRow -> DB Bool
 insertVal t row = (0 <) <$> withConn (`runInsert_` i)
-  where i = Insert 
-    { iTable = t
-    , iRows = [row]
-    , iReturning = rCount
-    , iOnConflict = Just DoNothing
-    }
+  where
+    i = Insert
+      { iTable = t
+      , iRows = [row]
+      , iReturning = rCount
+      , iOnConflict = Just DoNothing
+      }
 
 getInputsById :: ProbId -> GroupId -> DBErr [Inputs]
 getInputsById (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
@@ -198,11 +199,11 @@ getInputsById (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
 
 -- worth adding errors here?
 addUser :: Text -> GroupId -> DB Bool
-addUser username (GroupId gid) = insertVal userTable 
+addUser username (GroupId gid) = insertVal userTable
   (Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)
 
 addProblem :: Text -> Text -> JSONType -> DB Bool
-addProblem name desc ptype = insertVal probTable 
+addProblem name desc ptype = insertVal probTable
   (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing, sqlStrictText $ tShow ptype)
 
 addInput :: ProbId -> GroupId -> Text -> Text -> DB Bool
@@ -223,34 +224,34 @@ verifySolution probId user ans = do
       getInput = nthModulo (prob ^. probInputs) grp
       -- this won't work if we add more inputs after a problem is released
       -- maybe have a join table relating a user's input for a problem, to the user and problem
-  input <- getInput <$> getInputsById probId gid 
+  input <- getInput <$> getInputsById probId gid
   pure $ compareSolutions (prob ^. probSolType) (input ^. answer) ans
 
--- update :: Update a -> DB 
+-- update :: Update a -> DB
 update :: forall a. Update a -> DB a
 update args = withConn (`runUpdate_` args)
 
 updateScore :: User -> Int -> DBErr Int
 updateScore u sc = runQueryOr DBError update uArgs
-  where 
-    -- these need explicit foralls in order to typecheck 
+  where
+    -- these need explicit foralls in order to typecheck
     tupId :: forall s t a b. Field1 s t a b => Lens s t a b
-    tupId = _1'
     tupScore :: forall s t a b. Field4 s t a b => Lens s t a b
+    tupId = _1'
     tupScore  = _4'
     tupSolved = _5'
     uArgs = Update
       { uTable = userTable
-      , uReturning = rReturningI (view tupScore) 
+      , uReturning = rReturningI (view tupScore)
       , uUpdateWith = (tupId %~ Just) . (tupSolved %~ (+ 1)) . (tupScore %~ (fromIntegral sc +))
       , uWhere = (sqlInt4 (u ^. userId) .==) . view tupId
       }
 
-markSubmission :: ProbId -> User -> Text -> DBErr Int 
+markSubmission :: ProbId -> User -> Text -> DBErr Int
 markSubmission pid user ans = do
   res <- verifySolution pid user ans
   if res then
-    updateScore user correctSolutionPts 
+    updateScore user correctSolutionPts
   else except $ Left WrongAnswer
 
 updateProblem :: Problem -> DBErr Problem
@@ -259,7 +260,7 @@ updateProblem p = liftQuery fromCount update uArgs
         setWith tLens pLens = tLens .~ sqlStrictText (p ^. pLens)
         uArgs = Update { uTable = probTable
         , uReturning = rCount
-        , uUpdateWith = \(id, nm, ni, ds, sa, st) -> 
+        , uUpdateWith = \(id, nm, ni, ds, sa, st) ->
             ( Just id
             , sqlStrictText (p ^. probName)
             , Just ni

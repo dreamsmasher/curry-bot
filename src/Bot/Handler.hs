@@ -1,23 +1,28 @@
-{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE TypeApplications, BlockArguments, RankNTypes #-}
 module Bot.Handler where
 
 import Control.Monad.Extra
 import Data.Function
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
+import Data.Bifunctor (bimap, first)
 import Data.Word
 import Discord
 import Discord.Internal.Types.User as U
 import Discord.Requests
+import Text.URI ( mkURI, URI, ParseException)
+import Control.Monad.Catch as C
 
-import CommonModules
+import CommonModules hiding (first)
 import Types
 import Errors
 import DB
 import Utils
+import Network.HTTP.Req
 import Bot.Parser
 import Bot.Types
 import Bot.Embed
+import Bot.Constants
 
 type DSToken = Text
 
@@ -93,3 +98,39 @@ handleGet p conn msg = runDBErr conn (getProbById p)
   
 handleInput :: Responder ()
 handleInput conn msg = pure ()
+
+type SubmissionHandler = ExceptT SubmissionError IO 
+-- flip these args?
+getMsgInput :: BotReq -> Message -> SubmissionHandler Text
+getMsgInput cmd msg 
+  | takesAttachment cmd = maybe (getAttachment msg) pure $ getInlineData cmd
+  | otherwise = throwE NoInput
+
+dummyMsg t a = Message 0 0 dummyUsr t tme Nothing False False [] [] (maybeToList a) [] [] Nothing False Nothing
+  where tme = read "2021-03-04 00:45:41.091531966 UTC"
+dummyUsr = U.User 0 "" "" Nothing False False Nothing Nothing Nothing
+
+dmt = dummyMsg "" . Just $ Attachment 0 "file.txt" 2048 "https://nliu.net/secret" "" Nothing Nothing
+
+
+fetchAttachment :: MonadHttp m => Url a -> Option a -> m BsResponse
+fetchAttachment url = req GET url NoReqBody bsResponse
+
+getAttachment :: Message -> SubmissionHandler Text
+getAttachment msg = do
+  attach <- except . listToEither NoInput $ messageAttachments msg
+  assertCond ChonkyInput ((maxSubmissionSize >=) . attachmentSize) attach
+  -- TODO ambiguous type variables, figure out how to use TypeApplications here
+  let fromErr :: SubmissionError -> ParseException -> SubmissionHandler a
+      fromErr s = const (throwE s)
+  parsed <- mkURI (attachmentUrl attach) `catch` fromErr InvalidInput
+  urlOpts <- liftMaybe InvalidInput (useHttpsURI parsed)
+  -- runReq throws exceptions in rare situations, TODO figure out if it's worth trying to handle these
+  -- if we can't contact discord this way, then we can't contact discord thru websockets
+  resp <- liftIO (runReq defaultHttpConfig (uncurry fetchAttachment urlOpts))
+            `catch` fromErr (NetworkError "your message attachment")
+  pure . decodeUtf8 $ responseBody resp
+  -- liftIO $ print parsed
+
+  -- pure ""
+  -- req GET url NoReqBody bsResponse mempty
