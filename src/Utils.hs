@@ -69,7 +69,7 @@ instance  TShow [Char] where
     tShow = pack
 
 _assertCond :: Applicative f => (t -> f ()) -> t -> Bool -> f ()
-_assertCond thrower err = bool (pure ()) (thrower err)
+_assertCond thrower err = bool (thrower err) (pure ()) 
 
 assertCond :: Monad m => e -> Bool -> ExceptT e m ()
 assertCond = _assertCond throwE

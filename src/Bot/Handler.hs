@@ -146,7 +146,7 @@ fetchAttachment url = req GET url NoReqBody bsResponse
 getAttachment :: Message -> SubHandler ByteString
 getAttachment msg = do
   attach <- exceptS . listToEither NoInput $ messageAttachments msg
-  assertCondS ChonkyInput $ maxSubmissionSize <= attachmentSize attach 
+  assertCondS ChonkyInput $ attachmentSize attach <= maxSubmissionSize 
   -- TODO ambiguous type variables, figure out how to use TypeApplications here
   let fromErr :: SubmissionError -> ParseException -> SubHandler a
       fromErr s = const (throwS s)
