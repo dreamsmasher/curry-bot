@@ -61,6 +61,11 @@ throwS = SubHandler . throwE
 catchS e = SubHandler . catchE e
 exceptS = SubHandler . except
 
-runSubmit :: SubHandler a -> IO (Either SubmissionError a)
+-- inverse functions
+-- | run a SubHandler action in the IO monad.
+runSubmit :: SubHandler a -> IO (SubmissionResult a)
 runSubmit = runExceptT . runSubHandler
 
+-- | turn an arbitrary IO (Either SubmissionResult a) action into a SubHandler.
+liftSubmit :: IO (SubmissionResult a) -> SubHandler a
+liftSubmit = SubHandler . ExceptT

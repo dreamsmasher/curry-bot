@@ -62,9 +62,9 @@ messageHandler conn msg = when (sentByHuman msg) $ do
       let 
         f = case cmd of
           -- TODO accept user input as attachment too?
-          SubmitR p t -> handleSubmit p t 
+          SubmitR p t -> handleSubmit p t
           GetR p -> handleGet p
-          NewR -> undefined
+          NewR -> undefined -- TODO last unimplemented handler
           InputR -> handleInput
           SignupR -> signup 
       f conn msg
@@ -75,19 +75,40 @@ fromSnowflake (Snowflake s) = s
 
 handleSubmit :: ProbId -> Text -> Responder ()
 handleSubmit pid ans conn msg = do
-  check <- runDBErr conn $ do
-    user <- getUser (tShow . U.userId $ messageAuthor msg)
-    markSubmission pid user ans
+  res <- liftIO . runSubmit $ do
+    ans' <- fromUserSub ans msg :: SubHandler Text
+    {- this is actually a really funny transform
+    we'll denote functions with angle brackets
+
+    we go from 
+      (ExceptT SubmissionError (ReaderT Connection IO) a)
+        <runExceptT> ->
+        (ReaderT Connection IO (Either SubmissionError a))
+          <`runReaderT` conn> ->
+          (IO (Either SubmissionError a))
+          <liftIO> ->
+            ((MonadIO m) => m (Either SubmissionError a))
+          <ExceptT> ->
+          (ExceptT SubmissionError IO a)
+        <SubHandler> ->
+        (SubHandler (ExceptT SubmissionError IO a)) 
+    
+    altogether 5 monad transformations in a single line
+    zero runtime cost, though :)
+    -}
+    liftSubmit . runDBErr conn $ do
+      user <- getUser (tShow . U.userId $ messageAuthor msg)
+      markSubmission pid user ans'
   let 
     fmtScore = printf "Congratulations! Your new score is %d" 
-    respBody = tShow $ either show fmtScore check
+    respBody = tShow $ either show fmtScore res
   respond msg respBody
 
 signup :: Responder ()
 signup conn msg = do
   let author = messageAuthor msg 
       (uid, gid) = liftA2 (,) U.userId genUserGroup author
-      nope = "ERROR: You're already signed up!"
+      nope = "Error: You're already signed up!"
       yep  = "Signed up, welcome to the community!" -- tag user here?
   added <- runDB conn $ addUser (tShow uid) gid
   respond msg $ bool nope yep added
@@ -102,16 +123,14 @@ handleGet p conn msg =
 handleInput :: Responder ()
 handleInput conn msg = pure ()
 
-fromUserSub :: (FromJSON j) => BotReq -> Message -> SubHandler j
-fromUserSub cmd = 
-  getMsgInput cmd 
+fromUserSub :: (FromJSON j) => Text -> Message -> SubHandler j
+fromUserSub ans = 
+  getMsgInput ans 
   >=> decodeStrict >>> liftMaybe InvalidInput >>> SubHandler
 
 -- flip these args?
-getMsgInput :: BotReq -> Message -> SubHandler ByteString
-getMsgInput cmd msg 
-  | takesAttachment cmd = maybe (getAttachment msg) (pure . encodeUtf8) $ getInlineData cmd
-  | otherwise = throwS NoInput
+getMsgInput :: Text -> Message -> SubHandler ByteString
+getMsgInput body msg = bool (getAttachment msg) (pure $ encodeUtf8 body) $ not (T.null body)
 
 
 liftMaybeS :: SubmissionError -> Maybe a -> SubHandler a
@@ -138,7 +157,7 @@ getAttachment msg = do
 
 -- TODO delete these tests before deploy
 f :: SubHandler Value
-f = fromUserSub (SubmitR (ProbId 123) "") dmt
+f = fromUserSub "" dmt
 
 test :: IO ()
 test = do
