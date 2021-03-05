@@ -17,11 +17,22 @@ create table if not exists Users
 );
 
 create table if not exists Inputs
-( problem_id integer references Problems(id)
+( id serial primary key
+, problem_id integer references Problems(id)
 , group_id int not null
 , input json not null
 , answer json not null
 );
+
+create table if not exists Answers
+( problem_id integer references Problems(id)
+, input_id integer references Inputs(id)
+, user_id integer references Users(id)
+, solved boolean default false
+, unique (problem_id, user_id)
+);
+
+create index answer_lookup on Answers (user_id, problem_id);
 
 create or replace function inc_ref_count() returns trigger as $$
     begin

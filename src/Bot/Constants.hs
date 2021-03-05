@@ -18,5 +18,6 @@ maxSubmissionSize :: Integer
 maxSubmissionSize = 24000 
 
 -- TODO make this a precomputed embedded message
+-- or maybe load from JSON with TH
 helpStr :: Text
 helpStr = "Available commands: Submit, Get, New, Input, Signup, Help"

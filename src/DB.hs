@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, RankNTypes #-}
+{-# LANGUAGE BlockArguments, FlexibleContexts, RankNTypes #-}
 
 module DB
 ( DBErr (..)
@@ -9,7 +9,7 @@ module DB
 , getAllProblems
 , matchesId
 , getProbById
-, getInputsById
+, getInputsByProbGroup
 , addUser
 , addInput
 , addProblem
@@ -105,22 +105,50 @@ userTable =
       , tableField  "solved"
       )
 
-type InputFields =
-  ( Field SqlInt4
+type InputFieldI =
+  ( Maybe (Field SqlInt4)
+  , Field SqlInt4
   , Field SqlInt4
   , Field SqlJson
   , Field SqlText
   )
 
-type InputTable = Table InputFields InputFields
+type InputFieldO =
+  ( Field SqlInt4
+  , Field SqlInt4
+  , Field SqlInt4
+  , Field SqlJson
+  , Field SqlText
+  )
+
+type InputTable = Table InputFieldI InputFieldO
 
 inputTable :: InputTable
 inputTable =
-  table "inputs" $ p4
+  table "inputs" $ p5
+      ( serialField "id"
+      , tableField  "problem_id"
+      , tableField  "group_id"
+      , tableField  "input"
+      , tableField  "answer"
+      )
+
+type AnswerField = 
+  ( Field SqlInt4
+  , Field SqlInt4
+  , Field SqlInt4
+  , Field SqlBool
+  )
+
+type AnswerTable = Table AnswerField AnswerField
+
+answerTable :: AnswerTable
+answerTable = 
+  table "answers" $ p4
       ( tableField "problem_id"
-      , tableField "group_id"
-      , tableField "json"
-      , tableField "answer"
+      , tableField "input_id"
+      , tableField "user_id"
+      , tableField "solved"
       )
 
 _where :: Column SqlBool -> Select ()
@@ -135,23 +163,36 @@ withConn f = do
   conn <- ask
   liftIO (f conn)
 
-problemSelect :: Select ProbFieldsO -> DB [Problem]
-problemSelect ps = withConn $ (map toProblem <$>) . (`runSelect` ps)
-
 toProblem :: (Int, Text, Int, Text, UTCTime, Text) -> Problem
 toProblem = uncurryN (Problem . ProbId) . over _6 (fromMaybe NumT . toJSONType)
+
+problemSelect :: Select ProbFieldsO -> DB [Problem]
+problemSelect ps = withConn $ (map toProblem <$>) . (`runSelect` ps)
 
 toUser :: (Int, Int, Text, Int, Int) -> User
 toUser = uncurryN User . (_2' %~ GroupId)
 
+-- sqlJson gets turned into a String
+toInput :: (Int, Int, String, Text) -> Inputs
+toInput = uncurryN (Inputs . Just) . (_2 %~ GroupId) . (_3 %~ pack)
+
 userSelect :: Select UserFieldsO -> DB [User]
 userSelect us = withConn $ (map toUser <$>) . (`runSelect` us)
+
+answerSelect :: ((Int, Int, Int, Bool) -> a) -> Select AnswerField -> DB [a] 
+answerSelect f as = withConn $ (map f <$>) . (`runSelect` as)
 
 liftQuery :: Functor m => (a -> Either e b) -> (t -> m a) -> t -> ExceptT e m b
 liftQuery modifier selector q = ExceptT $ modifier <$> selector q
 
 runQueryOr :: Functor m => e -> (t -> m [a]) -> t -> ExceptT e m a
 runQueryOr err = liftQuery (listToEither err)
+
+tryDB :: (Connection -> b -> IO [a]) -> b -> DBErr a
+tryDB queryFunc = runQueryOr DBError $ withConn . flip queryFunc
+
+tryQuery :: (a -> Either e b1) -> (Connection -> b2 -> IO a) -> b2 -> ExceptT e (ReaderT Connection IO) b1
+tryQuery modFunc queryFunc = liftQuery modFunc $ withConn . flip queryFunc
 
 getUser :: Text -> DBErr User
 getUser usr = runQueryOr UserNotFound userSelect q
@@ -185,17 +226,54 @@ insertVal t row = (0 <) <$> withConn (`runInsert_` i)
       , iOnConflict = Just DoNothing
       }
 
-getInputsById :: ProbId -> GroupId -> DBErr [Inputs]
-getInputsById (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
-  where fromRow = uncurryN Inputs . (_1' %~ pack) . (_2' %~ GroupId) . (_3' %~ pack)
+getInputsByProbGroup :: ProbId -> GroupId -> DBErr [Inputs]
+getInputsByProbGroup (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
+  where fromRow (i, g, j, a) = 
+          Inputs (Just i)
+                 (GroupId g)
+                 (pack j)
+                 (pack a)
+             
         sel q = withConn $ (map fromRow <$>) . (`runSelect` q)
         nonEmpty = \case
           [] -> Left ProbNotFound
           xs -> Right xs
         q = do
-          rows@(probId, groupId, json, ans) <- selectTable inputTable
+          rows@(iId, probId, groupId, json, ans) <- selectTable inputTable
           where_ (probId `matchesId` p)
-          pure (json, groupId, ans)
+          pure (iId, groupId, json, ans)
+
+assocAnswer :: User -> ProbId -> DBErr Inputs
+assocAnswer usr pid = do
+  let ug = usr ^. userGroup
+  prob <- getProbById pid
+  inputs <- getInputsByProbGroup pid ug
+  let inp = nthModulo (prob ^. probInputs) (getGrp ug) inputs
+      row = (sqlInt4 $ getId pid, sqlInt4 $ getGrp ug, sqlInt4 $ usr ^. userId, sqlBool False)
+      ins = Insert 
+          { iTable = answerTable
+          , iRows = [row]
+          , iReturning = rCount
+          , iOnConflict = Just DoNothing
+          }
+  -- liftQuery (const (pure inp)) $ withConn $ map 
+  ExceptT 
+    $ bool (Left DBError) (Right inp) . (0 <) 
+    <$> withConn (`runInsert_` ins)
+
+getUserInput :: User -> ProbId -> DBErr Inputs
+getUserInput usr pid = getExisting `catchE` (\_ -> assocAnswer usr pid)
+-- if there isn't an answer association already, make one
+  where getExisting = do
+          inpId <- tryDB runSelect do
+                rows@(p, i, u, s) <- selectTable answerTable
+                where_ (p .== sqlInt4 (getId pid) .&& u .== sqlInt4 (usr ^. userId))
+                pure i
+
+          toInput <$> tryDB runSelect do
+            rows@(i, p, g, j, a) <- selectTable inputTable
+            where_ (i .== sqlInt4 inpId)
+            pure (i, g, j, a)
 
 -- worth adding errors here?
 addUser :: Text -> GroupId -> DB Bool
@@ -203,7 +281,7 @@ addUser username (GroupId gid) = insertVal userTable
   (Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)
 
 addProblem :: Text -> Text -> JSONType -> DBErr Int
-addProblem name desc ptype = ExceptT $ listToEither DBError <$> withConn (`runInsert_` i)
+addProblem name desc ptype = tryDB runInsert_ i
   where row = (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing, sqlStrictText $ tShow ptype)
         i = Insert
           { iTable = probTable
@@ -214,7 +292,8 @@ addProblem name desc ptype = ExceptT $ listToEither DBError <$> withConn (`runIn
 
 addInput :: ProbId -> GroupId -> Text -> Text -> DB Bool
 addInput pid gid inpJson ans = insertVal inputTable
-  ( sqlInt4 . getId $ pid
+  ( Nothing
+  , sqlInt4 . getId $ pid
   , sqlInt4 . getGrp $ gid
   , sqlStrictJSON . encodeUtf8 $ inpJson
   , sqlStrictText ans
@@ -226,11 +305,7 @@ nthModulo len n = (!! (n `mod` len))
 verifySolution :: ProbId -> User -> Text -> DBErr Bool
 verifySolution probId user ans = do
   prob <- getProbById probId
-  let gid@(GroupId grp) = user ^. userGroup
-      getInput = nthModulo (prob ^. probInputs) grp
-      -- this won't work if we add more inputs after a problem is released
-      -- maybe have a join table relating a user's input for a problem, to the user and problem
-  input <- getInput <$> getInputsById probId gid
+  input <- getUserInput user probId
   pure $ compareSolutions (prob ^. probSolType) (input ^. answer) ans
 
 -- update :: Update a -> DB
@@ -238,7 +313,7 @@ update :: forall a. Update a -> DB a
 update args = withConn (`runUpdate_` args)
 
 updateScore :: User -> Int -> DBErr Int
-updateScore u sc = runQueryOr DBError update uArgs
+updateScore u sc = tryDB runUpdate_ uArgs 
   where
     -- these need explicit foralls in order to typecheck
     tupId :: forall s t a b. Field1 s t a b => Lens s t a b
@@ -279,3 +354,19 @@ updateProblem p = liftQuery fromCount update uArgs
         fromCount = \case
           0 -> Left ProbNotFound
           _ -> Right p
+
+clearInputs :: ProbId -> DBErr Int
+clearInputs pid = do
+  let sqlPid = sqlInt4 (getId pid)
+  tryQuery pure runDelete_ $
+    Delete 
+    { dTable = answerTable
+    , dWhere = (sqlPid .==) . view _1 -- \(p, _, _, _) -> p .== sqlInt4 (getId pid)
+    , dReturning = rCount
+    }
+  tryQuery (pure . fromIntegral) runDelete_ $ 
+    Delete
+    { dTable = inputTable
+    , dWhere = (sqlPid .==) . view _2
+    , dReturning = rCount
+    }

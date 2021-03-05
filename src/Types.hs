@@ -8,11 +8,21 @@ import Control.Lens.TH
 import GHC.Generics
 import Data.Char (toLower, toUpper)
 import Data.Aeson.TH
-    ( deriveJSON,
-      defaultOptions,
-      Options(fieldLabelModifier, constructorTagModifier) )
-import Data.Aeson (FromJSON (..), ToJSON (..), genericToEncoding, Value (..), decode')
-import CommonModules hiding (User)
+    ( deriveJSON
+    , defaultOptions
+    , Options (..)
+      )
+import Data.Aeson 
+    ( FromJSON (..)
+    , ToJSON (..)
+    , Value (..)
+    , genericToEncoding
+    , (.:)
+    , (.=)
+    , decode'
+    , object
+    )
+import CommonModules hiding (User, (.=))
 
 newtype ProbId = ProbId {getId :: Int} deriving (Eq, Show, Generic)
 newtype GroupId = GroupId {getGrp :: Int} deriving (Eq, Show, Generic)
@@ -50,15 +60,23 @@ data User = User
     } deriving (Eq, Show)
 
 data Inputs = Inputs 
-    { _inputJson :: !Text -- don't need to decode
+    { _inputId   :: Maybe Int -- newtype this?
     , _groupId   :: !GroupId
+    , _inputJson :: !Text -- don't need to decode
     , _answer    :: !Text
     } deriving (Eq, Show)
+
+data InputSubmission = InputSub 
+    { _inputSProbId :: !ProbId
+    , _inputSJson   :: !Text
+    , _inputSAns    :: !Text
+    } deriving (Eq, Show, Generic)
 
 makeLenses ''Problem
 makeLenses ''ProbSubmission
 makeLenses ''User
 makeLenses ''Inputs
+makeLenses ''InputSubmission
 
 -- using generics for automatic instances
 instance FromJSON ProbId where
@@ -90,6 +108,19 @@ deriveJSON defaultOptions
     , constructorTagModifier = ("PSub" <>) 
                              . (\case {[] -> []; (x:xs) -> toUpper x : map toLower xs})
     } ''ProbSubmission
+
+instance FromJSON InputSubmission where
+    parseJSON (Object v) = InputSub
+        <$> (v .: "problemId" <&> ProbId) 
+        <*>  v .: "input"
+        <*>  v .: "answer"
+
+instance ToJSON InputSubmission where
+    toJSON (InputSub p i a) = object 
+        [ "problemId" .= getId p
+        , "input" .= i
+        , "answer" .= a
+        ]
 
 -- honestly belongs in Utils
 is :: Eq b => (a -> b) -> b -> a -> Bool

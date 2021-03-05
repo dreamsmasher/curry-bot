@@ -56,6 +56,7 @@ respondEmbed msg f a = () <$ (restCall . CreateMessageEmbed (messageChannel msg)
 -- Connection -> DBErr a -> SubHandler a
 liftDB :: r -> ExceptT SubmissionError (ReaderT r IO) a -> SubHandler a
 liftDB conn = liftSubmit . runDBErr conn
+
 -- use ReaderT here?
 type Responder a = Connection -> Message -> DiscordHandler a
 
@@ -84,6 +85,7 @@ handleSubmit :: ProbId -> Text -> Responder ()
 handleSubmit pid ans conn msg = do
   res <- runSubmit $ do
     ans' <- fromUserSub @Text ans msg 
+
     {- this is actually a really funny transform
     we'll denote functions with angle brackets
 
@@ -125,10 +127,14 @@ handleGet p conn msg =
   >>= either 
       (respond msg . tShow) -- error condition
       (respondEmbed msg embedProblem) 
-  
+
 -- TODO finish these handlers!!!
 handleInput :: Responder ()
-handleInput conn msg = error "UNIMPLEMENTED: handleInput"
+handleInput conn msg = do
+  result <- runSubmit $ do
+    attach <- getAttachment msg
+    pure undefined
+  pure ()
 
 -- TODO figure out a way to announce new problems, or implement some schedule
 -- TODO restrict certain actions based on user role

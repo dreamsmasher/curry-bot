@@ -15,17 +15,17 @@ import Utils
 embedProblem :: Problem -> CreateEmbed
 embedProblem p@Problem 
   { _probSolType = jsType
-  , _probId = pid
-  , _probSubmit = time
-  , _probName = name
+  , _probId      = pid
+  , _probSubmit  = time
+  , _probName    = name
   } = def 
-    { createEmbedAuthorName = botName
-    , createEmbedAuthorUrl = botRepoUrl
-    , createEmbedThumbnail = Nothing -- TODO make thumbnail
-    , createEmbedUrl = botRepoUrl -- TODO have this link to the problem somehow?
-    , createEmbedTitle = pack $ printf "%d: %s" (getId pid) name
+    { createEmbedAuthorName  = botName
+    , createEmbedAuthorUrl   = botRepoUrl
+    , createEmbedThumbnail   = Nothing -- TODO make thumbnail
+    , createEmbedUrl         = botRepoUrl -- TODO have this link to the problem somehow?
+    , createEmbedTitle       = pack $ printf "%d: %s" (getId pid) name
     , createEmbedDescription = p ^. probDesc
-    , createEmbedFields = map fmtFields
+    , createEmbedFields      = map fmtFields
       [ ("Solution type", tShow jsType)
       , ("Problem ID", tShow $ getId pid)
       , ("Submitted at", tShow $ utctDay time)
