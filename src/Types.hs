@@ -27,32 +27,32 @@ instance Show JSONType where
 
 -- direct map to our DB schema
 data Problem = Problem
-    { _probId      :: ProbId
-    , _probName    :: Text
-    , _probInputs  :: Int
-    , _probDesc    :: Text
-    , _probSubmit  :: UTCTime
-    , _probSolType :: JSONType
+    { _probId      :: !ProbId
+    , _probName    :: !Text
+    , _probInputs  :: !Int
+    , _probDesc    :: !Text
+    , _probSubmit  :: {-# UNPACK #-} !UTCTime
+    , _probSolType :: {-# UNPACK #-} !JSONType
     } deriving (Eq, Show)
 
 data ProbSubmission = ProbSub
-    { _PSubName :: Text
-    , _PSubDesc :: Text
-    , _PSubType :: JSONType
+    { _PSubName :: !Text
+    , _PSubDesc :: !Text
+    , _PSubType :: {-# UNPACK #-} !JSONType
     } deriving (Eq, Show)
 
 data User = User
-    { _userId     :: Int
-    , _userGroup  :: GroupId
-    , _userName   :: Text
-    , _userScore  :: Int
-    , _userSolved :: Int
+    { _userId     :: !Int
+    , _userGroup  :: !GroupId
+    , _userName   :: !Text
+    , _userScore  :: !Int
+    , _userSolved :: !Int
     } deriving (Eq, Show)
 
 data Inputs = Inputs 
-    { _inputJson :: Text -- don't need to decode
-    , _groupId   :: GroupId
-    , _answer    :: Text
+    { _inputJson :: !Text -- don't need to decode
+    , _groupId   :: !GroupId
+    , _answer    :: !Text
     } deriving (Eq, Show)
 
 makeLenses ''Problem
