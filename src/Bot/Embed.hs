@@ -30,5 +30,6 @@ embedProblem p@Problem
       , ("Problem ID", tShow $ getId pid)
       , ("Submitted at", tShow $ utctDay time)
       ]
+    , createEmbedFooterText = "React to this message to get your problem input."
     }
   where fmtFields (title, body) = EmbedField title body (Just True)

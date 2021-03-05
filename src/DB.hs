@@ -328,10 +328,25 @@ updateScore u sc = tryDB runUpdate_ uArgs
       , uWhere = (sqlInt4 (u ^. userId) .==) . view tupId
       }
 
+updatedSolved :: User -> ProbId -> DBErr Bool
+updatedSolved usr pid = tryDB runUpdate_ $ Update
+  { uTable = answerTable
+  , uReturning = rReturningI (view solved)
+  , uUpdateWith = solved .~ sqlBool True
+  , uWhere = liftA2 (.&&) ((uidField .==) . view tupUser) ((sqlInt4 (getId pid) .==) . view tupProb)
+  }
+  where solved :: forall s t a b. Field4 s t a b => Lens s t a b
+        solved = _4
+        tupProb = _1
+        tupUser = _3
+        uidField = sqlInt4 (usr ^. userId)
+        pidField = sqlInt4 (getId pid)
+
 markSubmission :: ProbId -> User -> Text -> DBErr Int
 markSubmission pid user ans = do
   res <- verifySolution pid user ans
-  if res then
+  if res then do
+    updatedSolved user pid 
     updateScore user correctSolutionPts
   else except $ Left WrongAnswer
 

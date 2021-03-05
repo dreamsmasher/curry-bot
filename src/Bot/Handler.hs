@@ -121,6 +121,7 @@ signup conn msg = do
   added <- runDB conn $ addUser (tShow $ U.userId author) (genUserGroup author)
   respond msg $ bool nope yep added
 
+-- handleGet should DM a user when they react to it
 handleGet :: ProbId -> Responder ()
 handleGet p conn msg = 
   runDBErr conn (getProbById p)
