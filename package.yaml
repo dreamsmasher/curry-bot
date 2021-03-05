@@ -1,4 +1,4 @@
-name:                code-consortium-bot
+name:                curry-bot
 version:             0.1.0.0
 github:              "dreamsmasher/curry-bot"
 license:             BSD3
@@ -17,7 +17,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/dreamsmasher/code-consortium-bot#readme>
+description:         Please see the README on GitHub at <https://github.com/dreamsmasher/curry-bot#readme>
 
 dependencies:
 - base >= 4.7 && < 5
@@ -55,7 +55,7 @@ library:
     - TupleSections
 
 executables:
-  code-consortium-bot-exe:
+  curry-bot-bin:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -65,7 +65,7 @@ executables:
     - -O2
 
     dependencies:
-    - code-consortium-bot
+    - curry-bot
     default-extensions:
       - TypeApplications
       - OverloadedStrings
@@ -74,7 +74,7 @@ executables:
       - TupleSections
 
 tests:
-  code-consortium-bot-test:
+  curry-bot-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -83,4 +83,4 @@ tests:
     - -with-rtsopts=-N
     - -O2
     dependencies:
-    - code-consortium-bot
+    - curry-bot

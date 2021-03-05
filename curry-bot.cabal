@@ -4,16 +4,16 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b42d4a753ced22bdf81628e041f2f53935079eaf0664521a12770095fe368155
+-- hash: 7dfc5071f6bd69443963d97c0f51a2b581d4c378bd042add624228f9d7630fea
 
-name:           code-consortium-bot
+name:           curry-bot
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/dreamsmasher/code-consortium-bot#readme>
-homepage:       https://github.com/dreamsmasher/code-consortium-bot#readme
-bug-reports:    https://github.com/dreamsmasher/code-consortium-bot/issues
+description:    Please see the README on GitHub at <https://github.com/dreamsmasher/curry-bot#readme>
+homepage:       https://github.com/dreamsmasher/curry-bot#readme
+bug-reports:    https://github.com/dreamsmasher/curry-bot/issues
 author:         Norman Liu
-maintainer:     normanwuweiliu@gmail.com
-copyright:      Copright 2020 Norman Liu
+maintainer:     norman@nliu.net
+copyright:      Copright 2021 Norman Liu
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -23,7 +23,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/dreamsmasher/code-consortium-bot
+  location: https://github.com/dreamsmasher/curry-bot
 
 library
   exposed-modules:
@@ -41,7 +41,7 @@ library
       Types
       Utils
   other-modules:
-      Paths_code_consortium_bot
+      Paths_curry_bot
   hs-source-dirs:
       src
   default-extensions: TypeApplications OverloadedStrings ImportQualifiedPost LambdaCase TupleSections
@@ -72,22 +72,22 @@ library
     , tuple
   default-language: Haskell2010
 
-executable code-consortium-bot-exe
+executable curry-bot-bin
   main-is: Main.hs
   other-modules:
-      Paths_code_consortium_bot
+      Paths_curry_bot
   hs-source-dirs:
       app
   default-extensions: TypeApplications OverloadedStrings ImportQualifiedPost LambdaCase TupleSections
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -O2
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
-    , code-consortium-bot
     , containers
     , contravariant
     , contravariant-extras
+    , curry-bot
     , discord-haskell
     , exceptions
     , extra
@@ -108,22 +108,22 @@ executable code-consortium-bot-exe
     , tuple
   default-language: Haskell2010
 
-test-suite code-consortium-bot-test
+test-suite curry-bot-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_code_consortium_bot
+      Paths_curry_bot
   hs-source-dirs:
       test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -O2
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
-    , code-consortium-bot
     , containers
     , contravariant
     , contravariant-extras
+    , curry-bot
     , discord-haskell
     , exceptions
     , extra
