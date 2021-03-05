@@ -1,10 +1,10 @@
 name:                code-consortium-bot
 version:             0.1.0.0
-github:              "dreamsmasher/code-consortium-bot"
+github:              "dreamsmasher/curry-bot"
 license:             BSD3
 author:              "Norman Liu"
-maintainer:          "normanwuweiliu@gmail.com"
-copyright:           "Copright 2020 Norman Liu"
+maintainer:          "norman@nliu.net"
+copyright:           "Copright 2021 Norman Liu"
 
 extra-source-files:
 - README.md
@@ -62,6 +62,8 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -O2
+
     dependencies:
     - code-consortium-bot
     default-extensions:
@@ -79,5 +81,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -O2
     dependencies:
     - code-consortium-bot
