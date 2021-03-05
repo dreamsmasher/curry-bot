@@ -57,8 +57,9 @@ parseBotReq = do
         Get -> parseProbId <&> GetR
         New -> pure NewR
         Input -> pure InputR
+        -- these two are expected to be passed in as JSON ^
         Signup -> pure SignupR
-        -- these two are expected to be passed in as JSON
+        Help -> pure HelpR
 
 -- TODO: figure out if the constant packing/unpacking hurts performance
 -- TODO: if so, switch over to ParsecT and explicitly use Text as the `Stream s` parameter

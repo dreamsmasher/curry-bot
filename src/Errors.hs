@@ -51,7 +51,9 @@ newtype SubHandler a = SubHandler {runSubHandler :: ExceptT SubmissionError IO a
              )
 
 instance MonadHttp SubHandler where            
-    handleHttpException = const (SubHandler . throwE $ NetworkError "this resource")
+    handleHttpException e = do 
+        liftIO (print e)
+        SubHandler . throwE $ NetworkError "this resource"
 
 throwS :: SubmissionError -> SubHandler a
 catchS :: ExceptT e IO a -> (e -> ExceptT SubmissionError IO a) -> SubHandler a

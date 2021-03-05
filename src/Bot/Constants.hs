@@ -16,3 +16,7 @@ botRepoUrl = "https://github.com/dreamsmasher/curry-bot"
 -- oversized input error string is automatically created at compile time
 maxSubmissionSize :: Integer
 maxSubmissionSize = 24000 
+
+-- TODO make this a precomputed embedded message
+helpStr :: Text
+helpStr = "Available commands: Submit, Get, New, Input, Signup, Help"

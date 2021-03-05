@@ -86,3 +86,4 @@ liftMaybe e = maybeToExceptT e . MaybeT . pure
 asDefaultWith :: Monad m => m b -> Maybe a -> (a -> m b) -> m b 
 asDefaultWith err mb act = maybe err act mb
 -- asDefaultWith e = flip (maybe e)
+

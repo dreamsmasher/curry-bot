@@ -1,0 +1,5 @@
+{
+    "name": "Jaden Case",
+    "desc": "Given a string of words, return the string in Jaden Case. Jaden Case consists of Writing Every Word Like This.",
+    "type": "string"
+}

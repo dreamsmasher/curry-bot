@@ -3,7 +3,7 @@ module Bot.Types where
 
 import Types
 import Data.Text qualified as T
-import CommonModules
+import CommonModules ( Text, bool )
 
 -- no camelcase here, 
 -- because the parsers depend on the string representations of these type constructors

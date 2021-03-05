@@ -5,6 +5,7 @@ import Control.Monad.Extra
 import Data.Aeson (decodeStrict, Value (..))
 import Data.Function
 import Data.ByteString ( ByteString )
+import Data.ByteString.Char8 qualified as B
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Bifunctor (bimap, first)
@@ -70,6 +71,7 @@ messageHandler conn msg = when (sentByHuman msg) $ do
           NewR -> handleNew 
           InputR -> handleInput
           SignupR -> signup 
+          HelpR -> helpMsg
       f conn msg
 
 -- default show instance will drop the constructor when converting to string
@@ -126,8 +128,22 @@ handleGet p conn msg =
 handleInput :: Responder ()
 handleInput conn msg = error "UNIMPLEMENTED: handleInput"
 
+-- TODO figure out a way to announce new problems, or implement some schedule
+-- TODO restrict certain actions based on user role
 handleNew :: Responder ()
-handleNew conn msg = error "UNIMPLEMENTED: handleNew"
+handleNew conn msg = do
+  result <- liftIO . runSubmit $ do
+    attach <- getAttachment msg
+    (ProbSub name desc typ) <- SubHandler . liftMaybe InvalidInput 
+                $ decodeStrict @ProbSubmission attach 
+
+    probId <- liftSubmit . runDBErr conn $ addProblem name desc typ
+    let successMsg = printf 
+          "New problem successfully added: `%s`. You can access it at problem `#%d`." name
+    pure . pack $ successMsg probId
+
+  respond msg $ either tShow id result
+
 
 fromUserSub :: (FromJSON j) => Text -> Message -> SubHandler j
 fromUserSub ans = 
@@ -143,7 +159,7 @@ liftMaybeS :: SubmissionError -> Maybe a -> SubHandler a
 liftMaybeS e = SubHandler . liftMaybe e
 
 -- TODO figure out if fetching the files will actually return decodable JSON
-fetchAttachment :: MonadHttp m => Url a -> Option a -> m BsResponse
+fetchAttachment :: forall m a. MonadHttp m => Url a -> Option a -> m BsResponse
 fetchAttachment url = req GET url NoReqBody bsResponse
 
 getAttachment :: Message -> SubHandler ByteString
@@ -154,23 +170,20 @@ getAttachment msg = do
   let fromErr :: SubmissionError -> ParseException -> SubHandler a
       fromErr s = const (throwS s)
   parsed <- mkURI (attachmentUrl attach) `catch` fromErr InvalidInput
-  urlOpts <- liftMaybeS InvalidInput (useHttpURI parsed)
-  -- runReq throws exceptions in rare situations, TODO figure out if it's worth trying to handle these
-  -- if we can't contact discord this way, then we can't contact discord thru websockets
-  resp <- runReq defaultHttpConfig (uncurry fetchAttachment urlOpts)
+  urlOpts <- liftMaybeS InvalidInput (useURI parsed)
+  -- either Http, Https 
+
+  let get = uncurry fetchAttachment
+  resp <- runReq defaultHttpConfig (either get get urlOpts)
             `catch` handleHttpException
   pure $ responseBody resp
+
+helpMsg :: Responder ()
+helpMsg _ msg = respond msg helpStr
 
 -- TODO delete these tests before deploy
 f :: SubHandler Value
 f = fromUserSub "" dmt
-
-test :: IO ()
-test = do
-  z <- print "hi"
-  res <- runExceptT . runSubHandler $ f
-  print res
-  pure ()
 
 dummyMsg t a = Message 0 0 dummyUsr t tme Nothing False False [] [] (maybeToList a) [] [] Nothing False Nothing
   where tme = read "2021-03-04 00:45:41.091531966 UTC"

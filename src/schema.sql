@@ -13,7 +13,7 @@ create table if not exists Users
 , snowflake varchar(64) not null
 , score int not null
 , solved int not null
-, unique(discord_name)
+, unique(snowflake)
 );
 
 create table if not exists Inputs

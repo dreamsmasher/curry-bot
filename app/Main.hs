@@ -44,6 +44,5 @@ main = do
   maybeToken <- getBotToken
   let noToken = error "You need to provide a Discord bot token to run a Discord bot..."
   noToken `asDefaultWith` maybeToken $ \dsTok -> do
-    print dsTok
     withConn "dbname='code-consortium'" $ 
       runDiscord . buildBotOpts dsTok >=> TIO.putStrLn

@@ -6,6 +6,7 @@ import Data.Text qualified as T
 import Data.ByteString.Lazy (fromStrict)
 import Control.Lens.TH
 import GHC.Generics
+import Data.Char (toLower, toUpper)
 import Data.Aeson.TH
     ( deriveJSON,
       defaultOptions,
@@ -24,6 +25,7 @@ instance Show JSONType where
         NumT -> "number"
         Arr a -> "[" <> show a <> "]"
 
+-- direct map to our DB schema
 data Problem = Problem
     { _probId      :: ProbId
     , _probName    :: Text
@@ -31,6 +33,12 @@ data Problem = Problem
     , _probDesc    :: Text
     , _probSubmit  :: UTCTime
     , _probSolType :: JSONType
+    } deriving (Eq, Show)
+
+data ProbSubmission = ProbSub
+    { _PSubName :: Text
+    , _PSubDesc :: Text
+    , _PSubType :: JSONType
     } deriving (Eq, Show)
 
 data User = User
@@ -48,6 +56,7 @@ data Inputs = Inputs
     } deriving (Eq, Show)
 
 makeLenses ''Problem
+makeLenses ''ProbSubmission
 makeLenses ''User
 makeLenses ''Inputs
 
@@ -75,6 +84,12 @@ deriveJSON defaultOptions
     { fieldLabelModifier = drop 1
     , constructorTagModifier = ('_' :)
     } ''Inputs
+
+deriveJSON defaultOptions 
+    { fieldLabelModifier = drop 5 . map toLower
+    , constructorTagModifier = ("PSub" <>) 
+                             . (\case {[] -> []; (x:xs) -> toUpper x : map toLower xs})
+    } ''ProbSubmission
 
 is :: Eq b => (a -> b) -> b -> a -> Bool
 is f p x = f x == p

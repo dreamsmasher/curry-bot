@@ -202,9 +202,15 @@ addUser :: Text -> GroupId -> DB Bool
 addUser username (GroupId gid) = insertVal userTable
   (Nothing, sqlInt4 gid, sqlStrictText username, 0, 0)
 
-addProblem :: Text -> Text -> JSONType -> DB Bool
-addProblem name desc ptype = insertVal probTable
-  (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing, sqlStrictText $ tShow ptype)
+addProblem :: Text -> Text -> JSONType -> DBErr Int
+addProblem name desc ptype = ExceptT $ listToEither DBError <$> withConn (`runInsert_` i)
+  where row = (Nothing, sqlStrictText name, Nothing, sqlStrictText desc, Nothing, sqlStrictText $ tShow ptype)
+        i = Insert
+          { iTable = probTable
+          , iRows = [row]
+          , iReturning = rReturningI (view _1) -- should probably just extend insertVal
+          , iOnConflict = Just DoNothing
+          }
 
 addInput :: ProbId -> GroupId -> Text -> Text -> DB Bool
 addInput pid gid inpJson ans = insertVal inputTable
