@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveGeneric, GADTs, DeriveFunctor, GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE RankNTypes, DeriveGeneric, GADTs, DeriveFunctor, GeneralisedNewtypeDeriving #-}
 module Errors where
 import GHC.Generics ( Generic )
 import Types
@@ -65,8 +65,8 @@ exceptS = SubHandler . except
 
 -- inverse functions
 -- | run a SubHandler action in the IO monad.
-runSubmit :: SubHandler a -> IO (SubmissionResult a)
-runSubmit = runExceptT . runSubHandler
+runSubmit :: forall m a. MonadIO m => SubHandler a -> m (SubmissionResult a)
+runSubmit = liftIO . runExceptT . runSubHandler
 
 -- | turn an arbitrary IO (Either SubmissionResult a) action into a SubHandler.
 liftSubmit :: IO (SubmissionResult a) -> SubHandler a

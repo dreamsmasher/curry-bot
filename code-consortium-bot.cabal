@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9efa0e4ad74ded54c938d13879e9448bbdfad24cc643651875417bf7fb225967
+-- hash: b42d4a753ced22bdf81628e041f2f53935079eaf0664521a12770095fe368155
 
 name:           code-consortium-bot
 version:        0.1.0.0
@@ -30,6 +30,7 @@ library
       Bot.Constants
       Bot.Embed
       Bot.Handler
+      Bot.Mocks
       Bot.Parser
       Bot.TH
       Bot.Types

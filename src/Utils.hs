@@ -8,6 +8,7 @@ module Utils
 , assertCond
 , assertCondS
 , liftMaybe
+, liftMaybeS
 , asDefaultWith
 )where
 
@@ -82,8 +83,10 @@ assertCondS = _assertCond throwS
 liftMaybe :: (Monad m) => e -> Maybe a -> ExceptT e m a
 liftMaybe e = maybeToExceptT e . MaybeT . pure
 
+liftMaybeS :: SubmissionError -> Maybe a -> SubHandler a
+liftMaybeS e = SubHandler . liftMaybe e
+
 -- I am out of good name ideas
 asDefaultWith :: Monad m => m b -> Maybe a -> (a -> m b) -> m b 
 asDefaultWith err mb act = maybe err act mb
 -- asDefaultWith e = flip (maybe e)
-

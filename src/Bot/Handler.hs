@@ -36,7 +36,6 @@ buildBotOpts tok conn =
     , discordOnEvent = eventHandler conn
     , discordOnLog = TIO.putStrLn
     , discordOnStart = liftIO $ putStrLn "CurryBot is running!"
-    
     }
 
 -- partially apply our connection to inject an environment
@@ -54,6 +53,9 @@ respond msg txt = () <$ restCall (CreateMessage (messageChannel msg) txt)
 respondEmbed :: Message -> (a -> CreateEmbed) -> a -> DiscordHandler () 
 respondEmbed msg f a = () <$ (restCall . CreateMessageEmbed (messageChannel msg) "" $ f a)
 
+-- Connection -> DBErr a -> SubHandler a
+liftDB :: r -> ExceptT SubmissionError (ReaderT r IO) a -> SubHandler a
+liftDB conn = liftSubmit . runDBErr conn
 -- use ReaderT here?
 type Responder a = Connection -> Message -> DiscordHandler a
 
@@ -80,8 +82,8 @@ fromSnowflake (Snowflake s) = s
 
 handleSubmit :: ProbId -> Text -> Responder ()
 handleSubmit pid ans conn msg = do
-  res <- liftIO . runSubmit $ do
-    ans' <- fromUserSub ans msg :: SubHandler Text
+  res <- runSubmit $ do
+    ans' <- fromUserSub @Text ans msg 
     {- this is actually a really funny transform
     we'll denote functions with angle brackets
 
@@ -101,7 +103,7 @@ handleSubmit pid ans conn msg = do
     altogether 5 monad transformations in a single line, within ReaderT DiscordHandle IO
     zero runtime cost, though :)
     -}
-    liftSubmit . runDBErr conn $ do
+    conn `liftDB` do
       user <- getUser . tShow . U.userId $ messageAuthor msg
       markSubmission pid user ans'
   let 
@@ -114,7 +116,7 @@ signup conn msg = do
   let author = messageAuthor msg 
       nope = "Error: You're already signed up!"
       yep  = "Signed up, welcome to the community!" -- tag user here?
-  added <- runDB conn $ (addUser . tShow . U.userId <*> genUserGroup) author
+  added <- runDB conn $ addUser (tShow $ U.userId author) (genUserGroup author)
   respond msg $ bool nope yep added
 
 handleGet :: ProbId -> Responder ()
@@ -132,18 +134,17 @@ handleInput conn msg = error "UNIMPLEMENTED: handleInput"
 -- TODO restrict certain actions based on user role
 handleNew :: Responder ()
 handleNew conn msg = do
-  result <- liftIO . runSubmit $ do
+  result <- runSubmit $ do
     attach <- getAttachment msg
-    (ProbSub name desc typ) <- SubHandler . liftMaybe InvalidInput 
-                $ decodeStrict @ProbSubmission attach 
+    (ProbSub name desc typ) <- SubHandler 
+      . liftMaybe InvalidInput 
+      $ decodeStrict @ProbSubmission attach 
 
-    probId <- liftSubmit . runDBErr conn $ addProblem name desc typ
+    probId <- conn `liftDB` addProblem name desc typ
     let successMsg = printf 
           "New problem successfully added: `%s`. You can access it at problem `#%d`." name
     pure . pack $ successMsg probId
-
   respond msg $ either tShow id result
-
 
 fromUserSub :: (FromJSON j) => Text -> Message -> SubHandler j
 fromUserSub ans = 
@@ -152,11 +153,10 @@ fromUserSub ans =
 
 -- flip these args?
 getMsgInput :: Text -> Message -> SubHandler ByteString
-getMsgInput body msg = bool (getAttachment msg) (pure $ encodeUtf8 body) $ not (T.null body)
-
-
-liftMaybeS :: SubmissionError -> Maybe a -> SubHandler a
-liftMaybeS e = SubHandler . liftMaybe e
+getMsgInput body msg = 
+  if not (T.null body)
+    then pure $ encodeUtf8 body
+    else getAttachment msg
 
 -- TODO figure out if fetching the files will actually return decodable JSON
 fetchAttachment :: forall m a. MonadHttp m => Url a -> Option a -> m BsResponse
@@ -166,9 +166,8 @@ getAttachment :: Message -> SubHandler ByteString
 getAttachment msg = do
   attach <- exceptS . listToEither NoInput $ messageAttachments msg
   assertCondS ChonkyInput $ attachmentSize attach <= maxSubmissionSize 
-  -- TODO ambiguous type variables, figure out how to use TypeApplications here
   let fromErr :: SubmissionError -> ParseException -> SubHandler a
-      fromErr s = const (throwS s)
+      fromErr s _ = throwS s
   parsed <- mkURI (attachmentUrl attach) `catch` fromErr InvalidInput
   urlOpts <- liftMaybeS InvalidInput (useURI parsed)
   -- either Http, Https 
@@ -180,13 +179,3 @@ getAttachment msg = do
 
 helpMsg :: Responder ()
 helpMsg _ msg = respond msg helpStr
-
--- TODO delete these tests before deploy
-f :: SubHandler Value
-f = fromUserSub "" dmt
-
-dummyMsg t a = Message 0 0 dummyUsr t tme Nothing False False [] [] (maybeToList a) [] [] Nothing False Nothing
-  where tme = read "2021-03-04 00:45:41.091531966 UTC"
-dummyUsr = U.User 0 "" "" Nothing False False Nothing Nothing Nothing
-
-dmt = dummyMsg "" . Just $ Attachment 0 "file.txt" 20048 "http://api.nliu.net/rants" "" Nothing Nothing
