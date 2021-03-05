@@ -9,14 +9,12 @@ module CommonModules
 , module Control.Monad.Trans.Maybe
 , module Control.Monad.IO.Class
 , module Data.Functor
+, module Data.Maybe
 , module Discord.Internal.Types
 , Text (..)
 , Connection (..)
 , UTCTime (..)
 , pack
-, fromMaybe
-, listToMaybe
-, maybeToList 
 , encodeUtf8
 , decodeUtf8
 , bool
@@ -40,7 +38,7 @@ import Data.Text ( Text (..), pack)
 import Data.Text.Encoding ( encodeUtf8, decodeUtf8 )
 import Data.Bool ( bool )
 import Database.PostgreSQL.Simple ( Connection (..) )
-import Data.Maybe ( fromMaybe, listToMaybe, maybeToList )
+import Data.Maybe 
 import Text.Printf ( printf )
 import Text.Read (readMaybe)
 import Data.Functor

@@ -4,7 +4,7 @@ module Bot.Handler where
 import Control.Monad.Extra
 import Data.Aeson (decodeStrict, Value (..))
 import Data.Function
-import Data.ByteString
+import Data.ByteString ( ByteString )
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Bifunctor (bimap, first)
@@ -34,6 +34,8 @@ buildBotOpts tok conn =
     { discordToken = tok
     , discordOnEvent = eventHandler conn
     , discordOnLog = TIO.putStrLn
+    , discordOnStart = liftIO $ putStrLn "CurryBot is running!"
+    
     }
 
 -- partially apply our connection to inject an environment
@@ -59,6 +61,7 @@ messageHandler conn msg = when (sentByHuman msg) $ do
   case parseMessage (messageText msg) of -- chances are we'll fail since every message is parsed
     Left _ -> pure ()
     Right cmd -> do
+      liftIO (print cmd)
       let 
         f = case cmd of
           -- TODO accept user input as attachment too?

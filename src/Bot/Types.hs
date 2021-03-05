@@ -7,18 +7,21 @@ import CommonModules
 
 -- no camelcase here, 
 -- because the parsers depend on the string representations of these type constructors
-data BotCmd = Submit 
-            | Get
-            | New
-            | Input
-            | Signup deriving (Eq, Show, Enum, Read)
+data BotCmd 
+    = Submit 
+    | Get
+    | New
+    | Input
+    | Help
+    | Signup deriving (Eq, Show, Enum, Read)
 
-data BotReq where
-    SubmitR :: ProbId -> Text -> BotReq
-    GetR :: ProbId -> BotReq
-    NewR :: BotReq
-    InputR :: BotReq
-    SignupR :: BotReq deriving (Eq, Show)
+data BotReq 
+    = SubmitR ProbId Text 
+    | GetR ProbId 
+    | NewR 
+    | InputR 
+    | HelpR
+    | SignupR deriving (Eq, Show)
 
 -- probably a more elegant solution with DataKinds
 -- |Returns whether a specific bot request should have an attachment to be processed

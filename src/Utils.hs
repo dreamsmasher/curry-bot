@@ -8,6 +8,7 @@ module Utils
 , assertCond
 , assertCondS
 , liftMaybe
+, asDefaultWith
 )where
 
 import Data.Text qualified as T
@@ -80,3 +81,8 @@ assertCondS = _assertCond throwS
 
 liftMaybe :: (Monad m) => e -> Maybe a -> ExceptT e m a
 liftMaybe e = maybeToExceptT e . MaybeT . pure
+
+-- I am out of good name ideas
+asDefaultWith :: Monad m => m b -> Maybe a -> (a -> m b) -> m b 
+asDefaultWith err mb act = maybe err act mb
+-- asDefaultWith e = flip (maybe e)
