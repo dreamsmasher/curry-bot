@@ -13,21 +13,22 @@ import Utils
 -- maybe split it up into chunks? 
 -- limit is 2048 chars desc, 25 * (1024 chars) fields, 2048 chars footer
 embedProblem :: Problem -> CreateEmbed
-embedProblem p = def 
-  { createEmbedAuthorName = botName
-  , createEmbedAuthorUrl = botRepoUrl
-  , createEmbedThumbnail = Nothing -- TODO make thumbnail
-  , createEmbedUrl = botRepoUrl
-  , createEmbedTitle = pack $ liftA2 (printf "%d: %s") (getId . view probId) (view probName) p
-  , createEmbedDescription = p ^. probDesc
-  , createEmbedFields = map (uncurry fmtFields . fmap ($ p)) 
-    [ ("Solution type", tShow . view probSolType)
-    , ("Problem ID", tShow . getId . view probId)
-    , ("Submitted at", tShow . utctDay . view probSubmit)
-    ]
-  }
-  where fmtFields title body = EmbedField title body (Just True)
-
-testProb :: Problem
-testProb = Problem (ProbId 10) "Jaden Case" 50 "Given an input string, turn it into a Jaden Smith tweet: capitalize every word of the string. Submit your answer as a string." t StrT
-  where t = read "2021-03-03 03:31:27.486597366 UTC"
+embedProblem p@Problem 
+  { _probSolType = jsType
+  , _probId = pid
+  , _probSubmit = time
+  , _probName = name
+  } = def 
+    { createEmbedAuthorName = botName
+    , createEmbedAuthorUrl = botRepoUrl
+    , createEmbedThumbnail = Nothing -- TODO make thumbnail
+    , createEmbedUrl = botRepoUrl -- TODO have this link to the problem somehow?
+    , createEmbedTitle = pack $ printf "%d: %s" (getId pid) name
+    , createEmbedDescription = p ^. probDesc
+    , createEmbedFields = map fmtFields
+      [ ("Solution type", tShow jsType)
+      , ("Problem ID", tShow $ getId pid)
+      , ("Submitted at", tShow $ utctDay time)
+      ]
+    }
+  where fmtFields (title, body) = EmbedField title body (Just True)

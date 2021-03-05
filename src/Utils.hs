@@ -10,7 +10,7 @@ module Utils
 , liftMaybe
 , liftMaybeS
 , asDefaultWith
-)where
+) where
 
 import Data.Text qualified as T
 import Discord.Internal.Types.User qualified as U
@@ -20,7 +20,6 @@ import CommonModules
 import Data.Aeson
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy qualified as BL
-import Data.Text.Lazy.Encoding qualified as TLE
 
 -- TODO make this less garbage
 genUserGroup :: U.User -> GroupId
@@ -76,7 +75,7 @@ _assertCond thrower err = bool (thrower err) (pure ())
 assertCond :: Monad m => e -> Bool -> ExceptT e m ()
 assertCond = _assertCond throwE
 
--- this should probably be in Errors, but that would mean export _assertCond
+-- this should probably be in Errors, but that would mean exporting _assertCond
 assertCondS :: SubmissionError -> Bool -> SubHandler ()
 assertCondS = _assertCond throwS
 

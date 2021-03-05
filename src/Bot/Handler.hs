@@ -135,10 +135,10 @@ handleInput conn msg = error "UNIMPLEMENTED: handleInput"
 handleNew :: Responder ()
 handleNew conn msg = do
   result <- runSubmit $ do
-    attach <- getAttachment msg
     (ProbSub name desc typ) <- SubHandler 
       . liftMaybe InvalidInput 
-      $ decodeStrict @ProbSubmission attach 
+      . decodeStrict @ProbSubmission 
+      =<< getAttachment msg
 
     probId <- conn `liftDB` addProblem name desc typ
     let successMsg = printf 
@@ -147,8 +147,7 @@ handleNew conn msg = do
   respond msg $ either tShow id result
 
 fromUserSub :: (FromJSON j) => Text -> Message -> SubHandler j
-fromUserSub ans = 
-  getMsgInput ans 
+fromUserSub ans = getMsgInput ans 
   >=> decodeStrict >>> liftMaybe InvalidInput >>> SubHandler
 
 -- flip these args?
@@ -177,5 +176,6 @@ getAttachment msg = do
             `catch` handleHttpException
   pure $ responseBody resp
 
+-- TODO maybe embed this?
 helpMsg :: Responder ()
 helpMsg _ msg = respond msg helpStr

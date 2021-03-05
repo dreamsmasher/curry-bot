@@ -91,6 +91,7 @@ deriveJSON defaultOptions
                              . (\case {[] -> []; (x:xs) -> toUpper x : map toLower xs})
     } ''ProbSubmission
 
+-- honestly belongs in Utils
 is :: Eq b => (a -> b) -> b -> a -> Bool
 is f p x = f x == p
 
@@ -101,9 +102,11 @@ is f p x = f x == p
 toJSONType :: Text -> Maybe JSONType
 toJSONType "number" = Just NumT
 toJSONType "string" = Just StrT
-toJSONType s | inBrackets = Arr <$> (toJSONType . T.init . T.tail) s
+toJSONType s | inBrackets s = Arr <$> (toJSONType . T.init . T.tail) s
              | otherwise = Nothing
-    where inBrackets = all ($ s) [not . T.null, T.head `is` '[', T.last `is` ']']
+    where all3 a b c = a && b && c
+          inBrackets = liftA3 all3 (not . T.null) (T.head `is` '[') (T.last `is` ']')
+          -- faster than using `all`
     
 instance FromJSON JSONType where
     parseJSON = \case
