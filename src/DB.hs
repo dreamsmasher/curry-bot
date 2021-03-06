@@ -12,11 +12,13 @@ module DB
 , getInputsByProbGroup
 , addUser
 , addInput
+, addInputNoGid
 , addProblem
 , getUser
 , verifySolution
 , updateScore
 , markSubmission
+, clearInputs
 ) where
 
 import Data.Int (Int64)
@@ -298,6 +300,12 @@ addInput pid gid inpJson ans = insertVal inputTable
   , sqlStrictJSON . encodeUtf8 $ inpJson
   , sqlStrictText ans
   )
+
+addInputNoGid :: ProbId -> Text -> Text -> DBErr Bool
+addInputNoGid pid json ans = do
+  prob <- getProbById pid
+  let g = GroupId (prob ^. probInputs)
+  lift $ addInput pid (GroupId $ prob ^. probInputs) json ans
 
 nthModulo :: Int -> Int -> [a] -> a
 nthModulo len n = (!! (n `mod` len))

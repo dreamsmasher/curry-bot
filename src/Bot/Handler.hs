@@ -4,6 +4,7 @@ module Bot.Handler where
 import Control.Monad.Extra
 import Data.Aeson (decodeStrict, Value (..))
 import Data.Function
+import Data.Foldable (toList)
 import Data.ByteString ( ByteString )
 import Data.ByteString.Char8 qualified as B
 import Data.Text qualified as T
@@ -29,19 +30,20 @@ import Bot.Constants
 
 type DSToken = Text
 
-buildBotOpts :: DSToken -> Connection -> RunDiscordOpts
-buildBotOpts tok conn =
+buildBotOpts :: DSToken -> BotEnv -> RunDiscordOpts
+buildBotOpts tok env =
   def
     { discordToken = tok
-    , discordOnEvent = eventHandler conn
+    , discordOnEvent = eventHandler env
     , discordOnLog = TIO.putStrLn
     , discordOnStart = liftIO $ putStrLn "CurryBot is running!"
     }
 
 -- partially apply our connection to inject an environment
-eventHandler :: Connection -> Event -> DiscordHandler ()
-eventHandler conn = \case
-  MessageCreate msg -> messageHandler conn msg
+eventHandler :: BotEnv -> Event -> DiscordHandler ()
+eventHandler env = \case
+  MessageCreate msg -> messageHandler env msg
+  -- MessageReactionAdd r -> reactionHandler env r
   _ -> pure ()
 
 sentByHuman :: Message -> Bool
@@ -60,8 +62,13 @@ liftDB conn = liftSubmit . runDBErr conn
 -- use ReaderT here?
 type Responder a = Connection -> Message -> DiscordHandler a
 
-messageHandler :: Responder ()
-messageHandler conn msg = when (sentByHuman msg) $ do
+-- turns out we don't need to pass the userId in. Keeping the BotEnv record as our environment though.
+getSelf :: DiscordHandler U.User
+getSelf = _currentUser <$> readCache
+
+messageHandler :: BotEnv -> Message -> DiscordHandler ()
+messageHandler env msg = when (sentByHuman msg) $ do
+  let conn = env ^. connection
   case parseMessage (messageText msg) of -- chances are we'll fail since every message is parsed
     Left _ -> pure ()
     Right cmd -> do
@@ -129,13 +136,21 @@ handleGet p conn msg =
       (respond msg . tShow) -- error condition
       (respondEmbed msg embedProblem) 
 
--- TODO finish these handlers!!!
 handleInput :: Responder ()
 handleInput conn msg = do
-  result <- runSubmit $ do
+  result <- runSubmit do
     attach <- getAttachment msg
-    pure undefined
-  pure ()
+    parsed <- SubHandler . liftMaybe InvalidInput 
+              $ decodeStrict @(Plural InputSubmission) attach
+    conn `liftDB` do 
+      let addFromInput (InputSub p j a) = addInputNoGid p j a
+      and <$> traverse addFromInput parsed
+  let respMsg = either tShow 
+        ( bool 
+          "Some of those inputs weren't commited for some reason. Check back in a bit."
+          "Inputs successfully added!"
+        ) result
+  respond msg respMsg
 
 -- TODO figure out a way to announce new problems, or implement some schedule
 -- TODO restrict certain actions based on user role
@@ -186,3 +201,23 @@ getAttachment msg = do
 -- TODO maybe embed this?
 helpMsg :: Responder ()
 helpMsg _ msg = respond msg helpStr
+
+-- Reaction handlers
+-- TODO figure out a way to associate sent messages with reactions
+-- pass around an MVar of MessageID's that the bot sent?
+-- or just have users manually message the bot?
+getMessageById :: ChannelId -> MessageId -> DiscordHandler (Either RestCallErrorCode Message)
+getMessageById = curry $ restCall . GetChannelMessage 
+
+reactionHandler :: BotEnv -> ReactionInfo -> DiscordHandler ()
+reactionHandler env rxn = do
+  botId <- U.userId <$> getSelf -- todo figure out if this is worth keeping in BotEnv
+  liftIO $ print rxn
+  when (reactionUserId rxn == botId) do
+    runExceptT do
+      msg <- ExceptT $ getMessageById (reactionChannelId rxn) (reactionMessageId rxn)
+      pure ()
+    pure ()
+   
+  pure ()
+  -- msg <- restCall ()

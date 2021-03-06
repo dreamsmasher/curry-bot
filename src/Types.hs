@@ -1,4 +1,11 @@
-{-# LANGUAGE DeriveGeneric, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, TemplateHaskell #-}
+{-# LANGUAGE 
+  DeriveGeneric
+, DeriveFunctor
+, FlexibleContexts
+, FlexibleInstances
+, MultiParamTypeClasses
+, TemplateHaskell 
+#-}
 
 module Types where
 
@@ -11,6 +18,7 @@ import Data.Aeson.TH
     ( deriveJSON
     , defaultOptions
     , Options (..)
+    , SumEncoding (..)
       )
 import Data.Aeson 
     ( FromJSON (..)
@@ -20,6 +28,7 @@ import Data.Aeson
     , (.:)
     , (.=)
     , decode'
+    , encode
     , object
     )
 import CommonModules hiding (User, (.=))
@@ -72,11 +81,26 @@ data InputSubmission = InputSub
     , _inputSAns    :: !Text
     } deriving (Eq, Show, Generic)
 
+data Plural a 
+    = Single a
+    | Many [a]
+    deriving (Eq, Show, Generic, Functor)
+
 makeLenses ''Problem
 makeLenses ''ProbSubmission
 makeLenses ''User
 makeLenses ''Inputs
 makeLenses ''InputSubmission
+
+instance Foldable Plural where
+    foldr f z = \case
+        Single x -> f x z
+        Many xs -> foldr f z xs
+
+instance Traversable Plural where
+    traverse f = \case
+        Single a -> Single <$> f a
+        Many xs -> Many <$> traverse f xs
 
 -- using generics for automatic instances
 instance FromJSON ProbId where
@@ -114,6 +138,7 @@ instance FromJSON InputSubmission where
         <$> (v .: "problemId" <&> ProbId) 
         <*>  v .: "input"
         <*>  v .: "answer"
+    parseJSON _ = empty
 
 instance ToJSON InputSubmission where
     toJSON (InputSub p i a) = object 
@@ -121,6 +146,11 @@ instance ToJSON InputSubmission where
         , "input" .= i
         , "answer" .= a
         ]
+
+deriveJSON defaultOptions 
+  { sumEncoding = UntaggedValue
+  } ''Plural
+    -- parseJSON (Array a) = Many $ foldr (\x xs -> parseJSON x : xs) [] a
 
 -- honestly belongs in Utils
 is :: Eq b => (a -> b) -> b -> a -> Bool
@@ -152,3 +182,9 @@ instance ToJSON JSONType where
             let (String x') = toJSON x
              in "[" <> x' <> "]"
 
+newtype BotEnv = BotEnv
+    { _connection :: Connection
+    -- , _botId :: UserId
+    } deriving (Eq)
+
+makeLenses ''BotEnv
