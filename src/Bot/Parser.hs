@@ -54,7 +54,7 @@ parseBotReq = do
         Submit -> do
             pid <- parseProbId <* spaces
             SubmitR pid . T.pack <$> manyTill anyChar eof
-        Get -> parseProbId <&> GetR
+        Get -> optionMaybe parseProbId <&> GetR
         New -> pure NewR
         Addinput -> pure AddInputR
         -- these two are expected to be passed in as JSON ^

@@ -22,6 +22,7 @@ module DB
 , clearInputs
 ) where
 
+import Data.Text qualified as T
 import Data.Aeson 
 import Data.ByteString.Char8 qualified as BS
 import Data.Int (Int64)
@@ -243,7 +244,6 @@ toInput (i, p, g, j, a) = do
 getInputsByProbGroup :: forall a b. (FromJSON a, FromJSON b) => ProbId -> GroupId -> DBErr [Inputs a b]
 getInputsByProbGroup (ProbId p) (GroupId g) = tryQuery (nonEmpty . mapEither toInput) runSelect q-- tryQuery nonEmpty sel q
   where 
-    
     nonEmpty = \case
       [] -> Left NoAssocInput
       xs -> Right xs
@@ -320,7 +320,10 @@ addInputNoGid pid json ans = do
 nthModulo :: Int -> Int -> [a] -> a
 nthModulo len n = (!! (n `mod` len))
 
-verifySolution :: ProbId -> User -> Text -> DBErr Bool
+debugStringCmp :: (Eq a) => [a] -> [a] -> [(Int, (a, a))]
+debugStringCmp a = filter (uncurry (/=) . snd) . zip [0..] . zip a
+
+verifySolution :: ProbId -> User -> Value -> DBErr Bool
 verifySolution probId user ans = do
   prob <- getProbById probId
   input <- getUserInput @Value user probId -- just decode as a value for JSON comparison
@@ -360,7 +363,7 @@ updatedSolved usr pid = tryDB runUpdate_ $ Update
         uidField = sqlInt4 (usr ^. userId)
         pidField = sqlInt4 (getId pid)
 
-markSubmission :: ProbId -> User -> Text -> DBErr Int
+markSubmission :: ProbId -> User -> Value -> DBErr Int
 markSubmission pid user ans = do
   res <- verifySolution pid user ans
   if res then do

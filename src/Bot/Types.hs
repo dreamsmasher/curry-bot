@@ -18,11 +18,11 @@ data BotCmd
 
 data BotReq 
     = SubmitR ProbId Text 
-    | GetR ProbId 
+    | GetR (Maybe ProbId) -- we'll respond with an error when this is Nothing
+                        -- for the sake of maintaining user experience
+                        -- e.g. user asks for a problem but doesn't give an id, they should be notified of this
     | NewR 
-    | InputR (Maybe ProbId) -- we'll respond with an error when this is Nothing
-                            -- for the sake of maintaining user experience
-                            -- e.g. user asks for a problem but doesn't give an id, they should be notified of this
+    | InputR (Maybe ProbId)  --same here
     | AddInputR
     | HelpR
     | SignupR deriving (Eq, Show)

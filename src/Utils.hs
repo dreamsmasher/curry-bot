@@ -30,16 +30,13 @@ genUserGroup :: U.User -> GroupId
 genUserGroup user = GroupId 
                   $ fromMaybe 0 (readMaybe (T.unpack (U.userDiscrim user))) `mod` 20
                     
-compareSolutions :: JSONType -> Value -> Text -> Bool
-compareSolutions t sol ans = fromMaybe False $ do
-    -- there's no direct Text -> Value function, afaik
-    ansVal <- decodeStrict $ encodeUtf8 ans
-    pure $ compareJSONType t ansVal && sol == ansVal
+compareSolutions :: JSONType -> Value -> Value -> Bool
+compareSolutions t sol = liftA2 (&&) (compareJSONType t) (sol ==) 
 
 compareJSONType :: JSONType -> Value -> Bool
 compareJSONType (Arr a) (Array b) = all (compareJSONType a) b
-compareJSONType NumT (Number n) = True
-compareJSONType StrT (String s) = True
+compareJSONType NumT (Number _) = True
+compareJSONType StrT (String _) = True
 compareJSONType _ _ = False
 -- is `all` rly necessary here? 
 -- e.g. if we have Array [Number 1, String 'hello', etc], would lead to a false positive
@@ -65,8 +62,9 @@ instance TShow Text where
 instance TShow B.ByteString where
     tShow = decodeUtf8
 
-instance  TShow BL.ByteString where
+instance TShow BL.ByteString where
     tShow = tShow . BL.toStrict
+    -- TODO really expensive, refactor if this ends up getting used more
 
 instance TShow [Char] where
     tShow = pack

@@ -74,12 +74,11 @@ getSelf :: DiscordHandler U.User
 getSelf = _currentUser <$> readCache
 
 messageHandler :: BotEnv -> Message -> DiscordHandler ()
-messageHandler env msg = when (sentByHuman msg) $ do
+messageHandler env msg = when (sentByHuman msg) do
   let conn = env ^. connection
   case parseMessage (messageText msg) of -- chances are we'll fail since every message is parsed
     Left _ -> pure ()
     Right cmd -> do
-      liftIO (print cmd)
       let 
         f = case cmd of
           -- TODO accept user input as attachment too?
@@ -101,8 +100,8 @@ getUserFromMsg = getUser . tShow . U.userId . messageAuthor
 
 handleSubmit :: ProbId -> Text -> Responder ()
 handleSubmit pid ans conn msg = do
-  res <- runSubmit $ do
-    ans' <- fromUserSub @Text ans msg 
+  res <- runSubmit do
+    ans' <- fromUserSub @Value ans msg 
 
     {- this is actually a really funny transform
     we'll denote functions with angle brackets
@@ -141,21 +140,19 @@ signup conn msg = do
 -- involves 3 rest calls
 sendInput :: (ToJSON a) => Problem -> Inputs a b -> Message -> DiscordHandler ()
 sendInput p inp msg = do
-  let printfStr = "Here's your input for problem `#%d`. Good luck!"
-      probTxt = pack . printf printfStr . getId $ view probId p
+  let fileStr = "currybot_input_%d.txt"
+      probTxt = pack . printf fileStr . getId $ view probId p
       inpJson = toStrict $ encode (inp ^. inputJson)
       -- channel = messageChannel msg
-  liftIO $ print inpJson
-  pure ()
-  -- err <- runExceptT $ do
-  --   -- get DM channel
-  --   -- TODO maybe cache this with Redis?
-  --   userChnl <- channelId <$> liftRest (CreateDM (U.userId $ messageAuthor msg))
-  --   -- DM input to user
-  --   sent <- liftRest $ CreateMessageUploadFile userChnl probTxt inpJson
-  --   -- edit the message to embed the problem info
-  --   liftRest $ EditMessage (userChnl, messageId sent) "" . Just $ embedProblem p
-  -- when (isLeft err) $ liftIO (print err) 
+  err <- runExceptT $ do
+    -- get DM channel
+    -- TODO maybe cache this with Redis?
+    userChnl <- channelId <$> liftRest (CreateDM (U.userId $ messageAuthor msg))
+    -- DM input to user
+    sent <- liftRest $ CreateMessageUploadFile userChnl probTxt inpJson
+    -- edit the message to embed the problem info
+    liftRest $ EditMessage (userChnl, messageId sent) "" . Just $ embedProblem p
+  when (isLeft err) $ liftIO (print err) 
 
 handleInput :: Maybe ProbId -> Responder ()
 handleInput Nothing _ msg = respond msg NoInput
@@ -172,8 +169,9 @@ handleInput (Just pid) conn msg = do
     Right (prob, input) -> sendInput prob input msg
 
 -- handleGet should DM a user when they react to it
-handleGet :: ProbId -> Responder ()
-handleGet p conn msg = 
+handleGet :: Maybe ProbId -> Responder ()
+handleGet Nothing _ msg = respond msg NoInput
+handleGet (Just p) conn msg = 
   runDBErr conn (getProbById p)
   >>= either 
       (respond msg) -- error condition
@@ -199,7 +197,7 @@ handleAddInput conn msg = do
 -- TODO restrict certain actions based on user role
 handleNew :: Responder ()
 handleNew conn msg = do
-  result <- runSubmit $ do
+  result <- runSubmit do
     (ProbSub name desc typ) <- SubHandler 
       . liftMaybe InvalidInput 
       . decodeStrict @ProbSubmission 
