@@ -16,6 +16,7 @@ module DB
 , addProblem
 , getUser
 , getUserInput
+, getLeaderBoard
 , verifySolution
 , updateScore
 , markSubmission
@@ -204,6 +205,10 @@ getUser usr = runQueryOr UserNotFound userSelect q
       let dsc = view _3 rows
       where_ (dsc .== sqlStrictText usr)
       pure rows
+
+getLeaderBoard :: DB [User]
+getLeaderBoard = userSelect . limit 10 . order $ selectTable userTable
+  where order = orderBy (desc (view _4) <> desc (view _5)) 
 
 getAllProblems :: DB [Problem]
 getAllProblems = problemSelect (selectTable probTable)

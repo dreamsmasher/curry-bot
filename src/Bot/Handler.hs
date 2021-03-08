@@ -12,16 +12,19 @@ import Data.Either (isLeft)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Bifunctor (bimap, first)
+import Data.Tuple.Extra ( uncurry3 )
 import Data.Word
+import Data.Map qualified as M
 import Discord
-import Discord.Internal.Types.User as U
+import Discord.Internal.Types.User hiding (User) 
+import Discord.Internal.Types.User qualified as U
 import Discord.Internal.Rest.Prelude
 import Discord.Requests
 import Text.URI ( mkURI, URI, ParseException)
 import Control.Monad.Catch as C
 
-import CommonModules hiding (first)
-import Types as Types
+import CommonModules hiding (first, User)
+import Types
 import Errors
 import DB
 import Utils
@@ -73,29 +76,38 @@ type Responder a = Connection -> Message -> DiscordHandler a
 getSelf :: DiscordHandler U.User
 getSelf = _currentUser <$> readCache
 
+getAllUsers :: GuildId -> DiscordHandler (Either RestCallErrorCode [U.User])
+getAllUsers guild = fmap (map memberUser) 
+                 <$> restCall (ListGuildMembers guild (GuildMembersTiming Nothing Nothing))
+
+-- | Given a bot command, returns a handler function 
+routeCmd :: BotReq -> (Connection -> Message -> DiscordHandler ())
+routeCmd = \case
+  -- TODO accept user input as attachment too?
+  SubmitR p t -> handleSubmit p t
+  GetR p -> handleGet p
+  InputR p -> handleInput p
+  Unary cmd' -> case cmd' of 
+    New -> handleNew 
+    Addinput -> handleAddInput
+    Signup -> signup 
+    Help -> helpMsg
+    Leaderboard -> handleLeaderboard
+    _ -> error ("MISSING HANDLER FOR " <> show (Unary cmd')) 
+
 messageHandler :: BotEnv -> Message -> DiscordHandler ()
 messageHandler env msg = when (sentByHuman msg) do
   let conn = env ^. connection
   case parseMessage (messageText msg) of -- chances are we'll fail since every message is parsed
     Left _ -> pure ()
-    Right cmd -> do
-      let 
-        f = case cmd of
-          -- TODO accept user input as attachment too?
-          SubmitR p t -> handleSubmit p t
-          GetR p -> handleGet p
-          NewR -> handleNew 
-          InputR p -> handleInput p
-          AddInputR -> handleAddInput
-          SignupR -> signup 
-          HelpR -> helpMsg
-      f conn msg
+    Right cmd -> routeCmd cmd conn msg
+      
 
 -- default show instance will drop the constructor when converting to string
 fromSnowflake :: Snowflake -> Word64
 fromSnowflake (Snowflake s) = s
 
-getUserFromMsg :: Message -> DBErr Types.User
+getUserFromMsg :: Message -> DBErr User
 getUserFromMsg = getUser . tShow . U.userId . messageAuthor
 
 handleSubmit :: ProbId -> Text -> Responder ()
@@ -192,6 +204,23 @@ handleAddInput conn msg = do
           "Inputs successfully added!"
         ) result
   respond msg respMsg
+
+-- TODO another thing to cache
+-- TODO figure out a better way to get every username, formatting them
+handleLeaderboard :: Responder ()
+handleLeaderboard conn msg = pure ()
+  -- top <- conn `runDB` getLeaderBoard 
+  -- let fmtTable :: [User] -> Text
+  --     fmtTable xs = T.concat . (\lst -> ticks : (lst <> [ticks])) $ map (pack . uncurry3 (printf fmt)) userData
+  --       where userData = map (\(User _ _ nme sc sv) -> (nme, show sc, show sv)) xs
+  --             trimap f (a, b, c) = (f a, f b, f c)
+  --             dotZip g (a, b, c) (d, e, f) = (g a b, g b e, g c f)
+  --             (nme, sc, sv) = trimap (+ 4) $ foldl' (\a x -> dotZip max a (trimap length x)) (0, 0, 0) userData
+  --             -- fmts@(nameFmt, scFmt, slvFmt) = trimap (printf "%% %dd" . (+ 4)) lens
+  --             fmt = printf "%% %ds|%% %ds|%% %ds" nme sc sv :: String
+  --             -- meta printf
+  --             ticks = "```" :: Text
+  -- respond msg $ fmtTable top 
 
 -- TODO figure out a way to announce new problems, or implement some schedule
 -- TODO restrict certain actions based on user role

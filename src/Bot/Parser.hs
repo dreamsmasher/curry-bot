@@ -55,13 +55,9 @@ parseBotReq = do
             pid <- parseProbId <* spaces
             SubmitR pid . T.pack <$> manyTill anyChar eof
         Get -> optionMaybe parseProbId <&> GetR
-        New -> pure NewR
-        Addinput -> pure AddInputR
-        -- these two are expected to be passed in as JSON ^
         Input -> optionMaybe parseProbId <&> InputR -- actually required, 
                                                     -- but we're lifting the error up past the parser
-        Signup -> pure SignupR
-        Help -> pure HelpR
+        _ -> pure $ Unary cmd
 
 -- TODO: figure out if the constant packing/unpacking hurts performance
 -- TODO: if so, switch over to ParsecT and explicitly use Text as the `Stream s` parameter

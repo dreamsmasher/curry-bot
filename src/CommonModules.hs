@@ -9,6 +9,7 @@ module CommonModules
 , module Control.Monad.Trans.Maybe
 , module Control.Monad.IO.Class
 , module Data.Functor
+, module Data.List
 , module Data.Maybe
 , module Discord.Internal.Types
 , Text (..)
@@ -26,7 +27,7 @@ module CommonModules
 import Control.Arrow
 import Control.Applicative
 import Control.Monad
-import Control.Lens
+import Control.Lens hiding (uncons)
 import Control.Monad.Trans.Except hiding (liftCallCC)
 import Control.Monad.Trans.Class
 import Control.Monad.IO.Class
@@ -34,6 +35,7 @@ import Control.Monad.Trans.Reader hiding (liftCallCC)
 import Control.Monad.Trans.Maybe hiding (liftCatch, liftListen, liftPass)
 import Discord.Internal.Types
 import Data.ByteString.Lazy ( fromStrict )
+import Data.List
 import Data.Text ( Text (..), pack)
 import Data.Text.Encoding ( encodeUtf8, decodeUtf8 )
 import Data.Bool ( bool )

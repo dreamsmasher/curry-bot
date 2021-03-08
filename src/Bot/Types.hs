@@ -14,17 +14,20 @@ data BotCmd
     | Input
     | Addinput
     | Help
+    | Leaderboard
     | Signup deriving (Eq, Show, Enum, Read)
 
 data BotReq 
-    = SubmitR ProbId Text 
-    | GetR (Maybe ProbId) -- we'll respond with an error when this is Nothing
+    = SubmitR !ProbId !Text 
+    | GetR !(Maybe ProbId) -- we'll respond with an error when this is Nothing
                         -- for the sake of maintaining user experience
                         -- e.g. user asks for a problem but doesn't give an id, they should be notified of this
-    | NewR 
-    | InputR (Maybe ProbId)  --same here
-    | AddInputR
-    | HelpR
+    | InputR {-# UNPACK #-} !(Maybe ProbId)  --same here
+    | Unary {-# UNPACK #-} !BotCmd
+    -- | NewR 
+    -- | AddInputR
+    -- | HelpR
+    -- | LeaderBoardR
     | SignupR deriving (Eq, Show)
 
 -- probably a more elegant solution with DataKinds
@@ -32,7 +35,7 @@ data BotReq
 takesAttachment :: BotReq -> Bool
 takesAttachment = \case
     SubmitR _ _ -> True
-    NewR        -> True 
+    Unary New   -> True 
     _           -> False
 
 -- expand definitions as needed
