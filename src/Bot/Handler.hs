@@ -52,8 +52,8 @@ eventHandler env = \case
 sentByHuman :: Message -> Bool
 sentByHuman = not . liftA2 (||) userIsBot userIsWebhook . messageAuthor
 
-respond :: Message -> Text -> DiscordHandler ()
-respond msg txt = () <$ restCall (CreateMessage (messageChannel msg) txt)
+respond :: forall t. TShow t => Message -> t -> DiscordHandler ()
+respond msg txt = () <$ restCall (CreateMessage (messageChannel msg) $ tShow txt)
 
 respondEmbed :: Message -> (a -> CreateEmbed) -> a -> DiscordHandler () 
 respondEmbed msg f = (() <$) .  restCall . CreateMessageEmbed (messageChannel msg) "" . f
@@ -126,15 +126,13 @@ handleSubmit pid ans conn msg = do
     conn `liftDB` do
       user <- getUserFromMsg msg
       markSubmission pid user ans'
-  let 
-    fmtScore = printf "Congratulations! Your new score is %d" 
-    respBody = tShow $ either show fmtScore res
-  respond msg respBody
+  let fmtScore = printf "Congratulations! Your new score is %d!" :: Int -> String
+  respond msg (fmtScore <$> res)
 
 signup :: Responder ()
 signup conn msg = do
   let author = messageAuthor msg 
-      nope = "Error: You're already signed up!"
+      nope = "Error: You're already signed up!" :: Text
       yep  = "Signed up, welcome to the community!" -- tag user here?
   added <- runDB conn $ addUser (tShow $ U.userId author) (genUserGroup author)
   respond msg $ bool nope yep added
@@ -159,21 +157,26 @@ sendInput p inp msg = do
   --   liftRest $ EditMessage (userChnl, messageId sent) "" . Just $ embedProblem p
   -- when (isLeft err) $ liftIO (print err) 
 
-handleInput :: ProbId -> Responder ()
-handleInput pid conn msg = do
-  input <- conn `runDBErr` do
+handleInput :: Maybe ProbId -> Responder ()
+handleInput Nothing _ msg = respond msg NoInput
+handleInput (Just pid) conn msg = do
+  probAndInput <- conn `runDBErr` do
     user <- getUserFromMsg msg
     -- TypeApplications don't work here for some reason
-    getUserInput user pid :: DBErr (Inputs Text Text)
+    problem <- getProbById pid
+    input <- getUserInput user pid :: DBErr (Inputs Text Text)
+    pure (problem, input)
   -- let resp = either (respond msg) (respondEmbed msg fmtInput)
-  pure ()
+  case probAndInput of 
+    Left e -> respond msg e
+    Right (prob, input) -> sendInput prob input msg
 
 -- handleGet should DM a user when they react to it
 handleGet :: ProbId -> Responder ()
 handleGet p conn msg = 
   runDBErr conn (getProbById p)
   >>= either 
-      (respond msg . tShow) -- error condition
+      (respond msg) -- error condition
       (respondEmbed msg embedProblem) 
 
 handleAddInput :: Responder ()
@@ -185,8 +188,8 @@ handleAddInput conn msg = do
     conn `liftDB` do 
       let addFromInput (InputSub p j a) = addInputNoGid p j a
       and <$> traverse addFromInput parsed
-  let respMsg = either tShow 
-        ( bool 
+  let respMsg = fmap 
+        ( bool @Text
           "Some of those inputs weren't commited for some reason. Check back in a bit."
           "Inputs successfully added!"
         ) result
@@ -206,7 +209,7 @@ handleNew conn msg = do
     let successMsg = printf 
           "New problem successfully added: `%s`. You can access it at problem `#%d`." name
     pure . pack $ successMsg probId
-  respond msg $ either tShow id result
+  respond msg result 
 
 fromUserSub :: (FromJSON j) => Text -> Message -> SubHandler j
 fromUserSub ans = getMsgInput ans 

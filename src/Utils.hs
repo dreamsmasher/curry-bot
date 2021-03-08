@@ -68,8 +68,12 @@ instance TShow B.ByteString where
 instance  TShow BL.ByteString where
     tShow = tShow . BL.toStrict
 
-instance  TShow [Char] where
+instance TShow [Char] where
     tShow = pack
+
+-- useful for when we respond to a message either with an error msg from tShow or an actual thing
+instance (TShow l, TShow r) => TShow (Either l r) where
+    tShow = either tShow tShow
 
 _assertCond :: Applicative f => (t -> f ()) -> t -> Bool -> f ()
 _assertCond thrower err = bool (thrower err) (pure ()) 
