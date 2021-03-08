@@ -56,8 +56,10 @@ parseBotReq = do
             SubmitR pid . T.pack <$> manyTill anyChar eof
         Get -> parseProbId <&> GetR
         New -> pure NewR
-        Input -> pure InputR
+        Addinput -> pure AddInputR
         -- these two are expected to be passed in as JSON ^
+        Input -> optionMaybe parseProbId <&> InputR -- actually required, 
+                                                    -- but we're lifting the error up past the parser
         Signup -> pure SignupR
         Help -> pure HelpR
 

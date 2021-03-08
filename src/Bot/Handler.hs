@@ -2,23 +2,26 @@
 module Bot.Handler where
 
 import Control.Monad.Extra
-import Data.Aeson (decodeStrict, Value (..))
+import Data.Aeson (decodeStrict, encode, Value (..), ToJSON (..), FromJSON (..))
 import Data.Function
 import Data.Foldable (toList)
 import Data.ByteString ( ByteString )
 import Data.ByteString.Char8 qualified as B
+import Data.ByteString.Lazy ( toStrict )
+import Data.Either (isLeft)
 import Data.Text qualified as T
 import Data.Text.IO qualified as TIO
 import Data.Bifunctor (bimap, first)
 import Data.Word
 import Discord
 import Discord.Internal.Types.User as U
+import Discord.Internal.Rest.Prelude
 import Discord.Requests
 import Text.URI ( mkURI, URI, ParseException)
 import Control.Monad.Catch as C
 
 import CommonModules hiding (first)
-import Types
+import Types as Types
 import Errors
 import DB
 import Utils
@@ -53,7 +56,11 @@ respond :: Message -> Text -> DiscordHandler ()
 respond msg txt = () <$ restCall (CreateMessage (messageChannel msg) txt)
 
 respondEmbed :: Message -> (a -> CreateEmbed) -> a -> DiscordHandler () 
-respondEmbed msg f a = () <$ (restCall . CreateMessageEmbed (messageChannel msg) "" $ f a)
+respondEmbed msg f = (() <$) .  restCall . CreateMessageEmbed (messageChannel msg) "" . f
+
+-- JSON restriction is arbitrary, since we don't actually do any explicit conversions here
+liftRest :: forall r a. (Request (r a), FromJSON a) => r a -> ExceptT RestCallErrorCode DiscordHandler a
+liftRest = ExceptT . restCall
 
 -- Connection -> DBErr a -> SubHandler a
 liftDB :: r -> ExceptT SubmissionError (ReaderT r IO) a -> SubHandler a
@@ -79,7 +86,8 @@ messageHandler env msg = when (sentByHuman msg) $ do
           SubmitR p t -> handleSubmit p t
           GetR p -> handleGet p
           NewR -> handleNew 
-          InputR -> handleInput
+          InputR p -> handleInput p
+          AddInputR -> handleAddInput
           SignupR -> signup 
           HelpR -> helpMsg
       f conn msg
@@ -87,6 +95,9 @@ messageHandler env msg = when (sentByHuman msg) $ do
 -- default show instance will drop the constructor when converting to string
 fromSnowflake :: Snowflake -> Word64
 fromSnowflake (Snowflake s) = s
+
+getUserFromMsg :: Message -> DBErr Types.User
+getUserFromMsg = getUser . tShow . U.userId . messageAuthor
 
 handleSubmit :: ProbId -> Text -> Responder ()
 handleSubmit pid ans conn msg = do
@@ -113,7 +124,7 @@ handleSubmit pid ans conn msg = do
     zero runtime cost, though :)
     -}
     conn `liftDB` do
-      user <- getUser . tShow . U.userId $ messageAuthor msg
+      user <- getUserFromMsg msg
       markSubmission pid user ans'
   let 
     fmtScore = printf "Congratulations! Your new score is %d" 
@@ -128,6 +139,35 @@ signup conn msg = do
   added <- runDB conn $ addUser (tShow $ U.userId author) (genUserGroup author)
   respond msg $ bool nope yep added
 
+-- arguably the most expensive operation
+-- involves 3 rest calls
+sendInput :: (ToJSON a) => Problem -> Inputs a b -> Message -> DiscordHandler ()
+sendInput p inp msg = do
+  let printfStr = "Here's your input for problem `#%d`. Good luck!"
+      probTxt = pack . printf printfStr . getId $ view probId p
+      inpJson = toStrict $ encode (inp ^. inputJson)
+      -- channel = messageChannel msg
+  liftIO $ print inpJson
+  pure ()
+  -- err <- runExceptT $ do
+  --   -- get DM channel
+  --   -- TODO maybe cache this with Redis?
+  --   userChnl <- channelId <$> liftRest (CreateDM (U.userId $ messageAuthor msg))
+  --   -- DM input to user
+  --   sent <- liftRest $ CreateMessageUploadFile userChnl probTxt inpJson
+  --   -- edit the message to embed the problem info
+  --   liftRest $ EditMessage (userChnl, messageId sent) "" . Just $ embedProblem p
+  -- when (isLeft err) $ liftIO (print err) 
+
+handleInput :: ProbId -> Responder ()
+handleInput pid conn msg = do
+  input <- conn `runDBErr` do
+    user <- getUserFromMsg msg
+    -- TypeApplications don't work here for some reason
+    getUserInput user pid :: DBErr (Inputs Text Text)
+  -- let resp = either (respond msg) (respondEmbed msg fmtInput)
+  pure ()
+
 -- handleGet should DM a user when they react to it
 handleGet :: ProbId -> Responder ()
 handleGet p conn msg = 
@@ -136,12 +176,12 @@ handleGet p conn msg =
       (respond msg . tShow) -- error condition
       (respondEmbed msg embedProblem) 
 
-handleInput :: Responder ()
-handleInput conn msg = do
+handleAddInput :: Responder ()
+handleAddInput conn msg = do
   result <- runSubmit do
     attach <- getAttachment msg
     parsed <- SubHandler . liftMaybe InvalidInput 
-              $ decodeStrict @(Plural InputSubmission) attach
+              $ decodeStrict @(Plural (InputSubmission Value Value)) attach
     conn `liftDB` do 
       let addFromInput (InputSub p j a) = addInputNoGid p j a
       and <$> traverse addFromInput parsed
@@ -209,15 +249,15 @@ helpMsg _ msg = respond msg helpStr
 getMessageById :: ChannelId -> MessageId -> DiscordHandler (Either RestCallErrorCode Message)
 getMessageById = curry $ restCall . GetChannelMessage 
 
-reactionHandler :: BotEnv -> ReactionInfo -> DiscordHandler ()
-reactionHandler env rxn = do
-  botId <- U.userId <$> getSelf -- todo figure out if this is worth keeping in BotEnv
-  liftIO $ print rxn
-  when (reactionUserId rxn == botId) do
-    runExceptT do
-      msg <- ExceptT $ getMessageById (reactionChannelId rxn) (reactionMessageId rxn)
-      pure ()
-    pure ()
+-- reactionHandler :: BotEnv -> ReactionInfo -> DiscordHandler ()
+-- reactionHandler env rxn = do
+--   botId <- U.userId <$> getSelf -- todo figure out if this is worth keeping in BotEnv
+--   liftIO $ print rxn
+--   when (reactionUserId rxn == botId) do
+--     runExceptT do
+--       msg <- ExceptT $ getMessageById (reactionChannelId rxn) (reactionMessageId rxn)
+--       pure ()
+--     pure ()
    
-  pure ()
-  -- msg <- restCall ()
+--   pure ()
+--   -- msg <- restCall ()

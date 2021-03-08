@@ -15,6 +15,7 @@ data SubmissionError
     | DoubleSignup 
     | InvalidInput 
     | NoInput     
+    | NoAssocInput
     | ProbNotFound 
     | TypeMisMatch JSONType 
     | DBError      
@@ -29,6 +30,7 @@ instance Show SubmissionError where
         ProbNotFound   -> "Invalid problem ID."
         InvalidInput   -> "Your submission is invalid - make sure they're formatted as valid JSON."
         NoInput        -> "Entries need to either be encoded in the message, or attached as a JSON file."
+        NoAssocInput   -> "This problem doesn't have any inputs associated with it yet!"
         TypeMisMatch t -> printf "Incorrect solution type - this problem is looking for a value of type %s" (show t) 
         DBError        -> "Something's wrong on our end, and we couldn't save your response. Try again in a few minutes :("
         NetworkError s -> printf "I encountered an error while trying to fetch %s, sorry! Try again in a little bit." s

@@ -68,17 +68,18 @@ data User = User
     , _userSolved :: !Int
     } deriving (Eq, Show)
 
-data Inputs = Inputs 
-    { _inputId   :: Maybe Int -- newtype this?
-    , _groupId   :: !GroupId
-    , _inputJson :: !Text -- don't need to decode
-    , _answer    :: !Text
+data Inputs a b = Inputs 
+    { _inputId     :: !(Maybe Int) -- newtype this?
+    , _inputProbId :: !ProbId
+    , _groupId     :: !GroupId
+    , _inputJson   :: !a -- don't need to decode
+    , _answer      :: !b
     } deriving (Eq, Show)
 
-data InputSubmission = InputSub 
+data InputSubmission a b = InputSub 
     { _inputSProbId :: !ProbId
-    , _inputSJson   :: !Text
-    , _inputSAns    :: !Text
+    , _inputSJson   :: !a
+    , _inputSAns    :: !b
     } deriving (Eq, Show, Generic)
 
 data Plural a 
@@ -133,14 +134,14 @@ deriveJSON defaultOptions
                              . (\case {[] -> []; (x:xs) -> toUpper x : map toLower xs})
     } ''ProbSubmission
 
-instance FromJSON InputSubmission where
+instance (FromJSON a, FromJSON b) => FromJSON (InputSubmission a b) where
     parseJSON (Object v) = InputSub
         <$> (v .: "problemId" <&> ProbId) 
         <*>  v .: "input"
         <*>  v .: "answer"
     parseJSON _ = empty
 
-instance ToJSON InputSubmission where
+instance (ToJSON a, ToJSON b) => ToJSON (InputSubmission a b) where
     toJSON (InputSub p i a) = object 
         [ "problemId" .= getId p
         , "input" .= i

@@ -15,12 +15,15 @@ module DB
 , addInputNoGid
 , addProblem
 , getUser
+, getUserInput
 , verifySolution
 , updateScore
 , markSubmission
 , clearInputs
 ) where
 
+import Data.Aeson 
+import Data.ByteString.Char8 qualified as BS
 import Data.Int (Int64)
 import Data.Profunctor.Product
 import Data.Profunctor
@@ -30,7 +33,7 @@ import Types
 import CommonModules hiding (User, userId)
 import Bot.Constants
 import Errors
-import Utils (tShow, compareSolutions, listToEither)
+import Utils (tShow, compareSolutions, listToEither, mapEither)
 
 type DB = ReaderT Connection IO
 
@@ -112,7 +115,7 @@ type InputFieldI =
   , Field SqlInt4
   , Field SqlInt4
   , Field SqlJson
-  , Field SqlText
+  , Field SqlJson
   )
 
 type InputFieldO =
@@ -120,7 +123,7 @@ type InputFieldO =
   , Field SqlInt4
   , Field SqlInt4
   , Field SqlJson
-  , Field SqlText
+  , Field SqlJson
   )
 
 type InputTable = Table InputFieldI InputFieldO
@@ -174,10 +177,6 @@ problemSelect ps = withConn $ (map toProblem <$>) . (`runSelect` ps)
 toUser :: (Int, Int, Text, Int, Int) -> User
 toUser = uncurryN User . (_2' %~ GroupId)
 
--- sqlJson gets turned into a String
-toInput :: (Int, Int, String, Text) -> Inputs
-toInput = uncurryN (Inputs . Just) . (_2 %~ GroupId) . (_3 %~ pack)
-
 userSelect :: Select UserFieldsO -> DB [User]
 userSelect us = withConn $ (map toUser <$>) . (`runSelect` us)
 
@@ -228,24 +227,32 @@ insertVal t row = (0 <) <$> withConn (`runInsert_` i)
       , iOnConflict = Just DoNothing
       }
 
-getInputsByProbGroup :: ProbId -> GroupId -> DBErr [Inputs]
-getInputsByProbGroup (ProbId p) (GroupId g) = liftQuery nonEmpty sel q
-  where fromRow (i, g, j, a) = 
-          Inputs (Just i)
-                 (GroupId g)
-                 (pack j)
-                 (pack a)
-             
-        sel q = withConn $ (map fromRow <$>) . (`runSelect` q)
-        nonEmpty = \case
-          [] -> Left ProbNotFound
-          xs -> Right xs
-        q = do
-          rows@(iId, probId, groupId, json, ans) <- selectTable inputTable
-          where_ (probId `matchesId` p)
-          pure (iId, groupId, json, ans)
+fromRes :: Result a -> SubmissionResult a
+fromRes (Error s) = Left InvalidInput 
+fromRes (Success x) = Right x
 
-assocAnswer :: User -> ProbId -> DBErr Inputs
+fromValue :: forall a. FromJSON a => Value -> SubmissionResult a
+fromValue = fromRes . fromJSON 
+
+toInput :: (FromJSON a, FromJSON b) => (Int, Int, Int, Value, Value) -> SubmissionResult (Inputs a b)
+toInput (i, p, g, j, a) = do
+  j' <- fromValue j
+  a' <- fromValue a
+  pure $ Inputs (Just i) (ProbId p) (GroupId g) j' a'
+
+getInputsByProbGroup :: forall a b. (FromJSON a, FromJSON b) => ProbId -> GroupId -> DBErr [Inputs a b]
+getInputsByProbGroup (ProbId p) (GroupId g) = tryQuery (nonEmpty . mapEither toInput) runSelect q-- tryQuery nonEmpty sel q
+  where 
+    
+    nonEmpty = \case
+      [] -> Left NoAssocInput
+      xs -> Right xs
+    q = do
+      rows@(_, probId, _, _, _) <- selectTable inputTable
+      where_ (probId `matchesId` p)
+      pure rows
+
+assocAnswer :: (FromJSON a, FromJSON b) => User -> ProbId -> DBErr (Inputs a b)
 assocAnswer usr pid = do
   let ug = usr ^. userGroup
   prob <- getProbById pid
@@ -263,19 +270,20 @@ assocAnswer usr pid = do
     $ bool (Left DBError) (Right inp) . (0 <) 
     <$> withConn (`runInsert_` ins)
 
-getUserInput :: User -> ProbId -> DBErr Inputs
+getUserInput :: (ToJSON a, FromJSON a, ToJSON b, FromJSON b) => User -> ProbId -> DBErr (Inputs a b)
 getUserInput usr pid = getExisting `catchE` (\_ -> assocAnswer usr pid)
 -- if there isn't an answer association already, make one
-  where getExisting = do
-          inpId <- tryDB runSelect do
-                rows@(p, i, u, s) <- selectTable answerTable
-                where_ (p .== sqlInt4 (getId pid) .&& u .== sqlInt4 (usr ^. userId))
-                pure i
-
-          toInput <$> tryDB runSelect do
-            rows@(i, p, g, j, a) <- selectTable inputTable
-            where_ (i .== sqlInt4 inpId)
-            pure (i, g, j, a)
+  where 
+    getExisting = do
+      inpId <- tryDB runSelect do
+        rows@(p, i, u, s) <- selectTable answerTable
+        where_ (p .== sqlInt4 (getId pid) .&& u .== sqlInt4 (usr ^. userId))
+        pure i
+      except . toInput =<< tryDB runSelect do
+        rows@(i, _, _, _, _) <- selectTable inputTable
+        where_ (i .== sqlInt4 inpId)
+        pure rows
+      
 
 -- worth adding errors here?
 addUser :: Text -> GroupId -> DB Bool
@@ -292,16 +300,18 @@ addProblem name desc ptype = tryDB runInsert_ i
           , iOnConflict = Just DoNothing
           }
 
-addInput :: ProbId -> GroupId -> Text -> Text -> DB Bool
+addInput :: (ToJSON a, ToJSON b) => ProbId -> GroupId -> a -> b -> DB Bool
 addInput pid gid inpJson ans = insertVal inputTable
   ( Nothing
   , sqlInt4 . getId $ pid
   , sqlInt4 . getGrp $ gid
-  , sqlStrictJSON . encodeUtf8 $ inpJson
-  , sqlStrictText ans
+  , sqlValueJSON inpJson
+  -- need to wrap the inner text in quotes, so we convert from Text -> String -> Bytestring
+  -- definitely some unnecessary copying here 
+  , sqlValueJSON ans
   )
 
-addInputNoGid :: ProbId -> Text -> Text -> DBErr Bool
+addInputNoGid :: (FromJSON a, ToJSON a, FromJSON b, ToJSON b) => ProbId -> a -> b -> DBErr Bool
 addInputNoGid pid json ans = do
   prob <- getProbById pid
   let g = GroupId (prob ^. probInputs)
@@ -313,7 +323,7 @@ nthModulo len n = (!! (n `mod` len))
 verifySolution :: ProbId -> User -> Text -> DBErr Bool
 verifySolution probId user ans = do
   prob <- getProbById probId
-  input <- getUserInput user probId
+  input <- getUserInput @Value user probId -- just decode as a value for JSON comparison
   pure $ compareSolutions (prob ^. probSolType) (input ^. answer) ans
 
 -- update :: Update a -> DB

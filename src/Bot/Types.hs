@@ -12,6 +12,7 @@ data BotCmd
     | Get
     | New
     | Input
+    | Addinput
     | Help
     | Signup deriving (Eq, Show, Enum, Read)
 
@@ -19,7 +20,10 @@ data BotReq
     = SubmitR ProbId Text 
     | GetR ProbId 
     | NewR 
-    | InputR 
+    | InputR (Maybe ProbId) -- we'll respond with an error when this is Nothing
+                            -- for the sake of maintaining user experience
+                            -- e.g. user asks for a problem but doesn't give an id, they should be notified of this
+    | AddInputR
     | HelpR
     | SignupR deriving (Eq, Show)
 

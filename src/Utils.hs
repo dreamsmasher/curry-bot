@@ -10,9 +10,12 @@ module Utils
 , liftMaybe
 , liftMaybeS
 , asDefaultWith
+, mapEither
+, showTrace
 ) where
 
 import Data.Text qualified as T
+import Debug.Trace ( trace )
 import Discord.Internal.Types.User qualified as U
 import Types
 import Errors 
@@ -20,19 +23,18 @@ import CommonModules
 import Data.Aeson
 import Data.ByteString qualified as B
 import Data.ByteString.Lazy qualified as BL
+import Data.Either (isRight)
 
 -- TODO make this less garbage
 genUserGroup :: U.User -> GroupId
 genUserGroup user = GroupId 
                   $ fromMaybe 0 (readMaybe (T.unpack (U.userDiscrim user))) `mod` 20
                     
-compareSolutions :: JSONType -> Text -> Text -> Bool
+compareSolutions :: JSONType -> Value -> Text -> Bool
 compareSolutions t sol ans = fromMaybe False $ do
     -- there's no direct Text -> Value function, afaik
-    let toVal = decode . fromStrict . encodeUtf8
-    solVal <- toVal sol 
-    ansVal <- toVal ans
-    pure $ compareJSONType t ansVal && solVal == ansVal
+    ansVal <- decodeStrict $ encodeUtf8 ans
+    pure $ compareJSONType t ansVal && sol == ansVal
 
 compareJSONType :: JSONType -> Value -> Bool
 compareJSONType (Arr a) (Array b) = all (compareJSONType a) b
@@ -89,3 +91,13 @@ liftMaybeS e = SubHandler . liftMaybe e
 asDefaultWith :: Monad m => m b -> Maybe a -> (a -> m b) -> m b 
 asDefaultWith err mb act = maybe err act mb
 -- asDefaultWith e = flip (maybe e)
+
+-- |collect all the Right results from mapping a function that returns an Either value.
+mapEither :: (a -> Either b c) -> [a] -> [c]
+mapEither f = foldr (\x xs -> case f x of 
+        Right x' -> x' : xs
+        _ -> xs) []
+    -- mapEither f = map (\(Right x) -> x) . filter isRight . map f
+
+showTrace :: Show a => a -> a
+showTrace = show >>= trace
