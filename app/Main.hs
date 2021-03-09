@@ -29,18 +29,19 @@ loadDotEnv s = do
         mbPair (t:ts) = Just (t, T.concat ts)
     pure $ mapMaybe (mbPair . T.split (== '=')) fp
 
-listOrEnv ::  Text -> [(Text, Text)] -> IO (Maybe Text)
-listOrEnv a = maybe (fmap pack <$> lookupEnv (T.unpack a)) (pure . Just) . lookup a 
+listOrEnv ::  Text -> [(Text, Text)] -> MaybeT IO Text
+listOrEnv a = MaybeT . maybe (fmap pack <$> lookupEnv (T.unpack a)) (pure . Just) . lookup a 
 
 getBotInfo :: IO (Maybe (Text, UserId))
 getBotInfo = do
   args <- getArgs
+  let mpure = MaybeT . pure
   runMaybeT do 
-    file <- MaybeT . pure $ listToMaybe args
+    file <- mpure $ listToMaybe args
     vars <- liftIO $ loadDotEnv file
-    dst <- MaybeT (listOrEnv "DISCORD_TOKEN" vars)
-    idStr <- T.unpack <$> MaybeT (listOrEnv "DISCORD_ID" vars) 
-    dsId <- MaybeT . pure $ readMaybe idStr
+    dst <- listOrEnv "DISCORD_TOKEN" vars
+    idStr <- T.unpack <$> listOrEnv "DISCORD_ID" vars 
+    dsId <- mpure $ readMaybe idStr
     -- MaybeT $ pure (lookup "DISCORD_TOKEN" vars) 
     --   <|> (fmap pack <$> lookupEnv "DISCORD_TOKEN") -- these strings are different types
     pure (dst, dsId)
@@ -50,7 +51,6 @@ main = do
   -- fail if env var doesn't exist, we need this value
   maybeToken <- getBotInfo
   let noToken = error "You need to provide a Discord bot token and ID to run a Discord bot..."
-  noToken `asDefaultWith` maybeToken $ \(dsTok, dsId) -> do
-    withConn "dbname='code-consortium'" $ 
-      -- runDiscord . buildBotOpts dsTok . (`BotEnv` dsId) >=> TIO.putStrLn
-      runDiscord . buildBotOpts dsTok . BotEnv >=> TIO.putStrLn
+  noToken `asDefaultUsing` maybeToken $ \(dsTok, dsId) -> do
+    withConn "dbname='code-consortium'" 
+      $ BotEnv >>> buildBotOpts dsTok >>> runDiscord >=> TIO.putStrLn

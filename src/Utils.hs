@@ -9,7 +9,7 @@ module Utils
 , assertCondS
 , liftMaybe
 , liftMaybeS
-, asDefaultWith
+, asDefaultUsing
 , mapEither
 , showTrace
 ) where
@@ -90,9 +90,9 @@ liftMaybeS :: SubmissionError -> Maybe a -> SubHandler a
 liftMaybeS e = SubHandler . liftMaybe e
 
 -- I am out of good name ideas
-asDefaultWith :: Monad m => m b -> Maybe a -> (a -> m b) -> m b 
-asDefaultWith err mb act = maybe err act mb
--- asDefaultWith e = flip (maybe e)
+asDefaultUsing :: b -> Maybe a -> (a -> b) -> b 
+asDefaultUsing err mb act = maybe err act mb
+-- asDefaultUsing e = flip (maybe e)
 
 -- |collect all the Right results from mapping a function that returns an Either value.
 mapEither :: (a -> Either b c) -> [a] -> [c]
