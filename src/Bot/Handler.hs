@@ -87,7 +87,7 @@ routeCmd = \case
   SubmitR p t -> handleSubmit p t
   GetR p -> handleGet p
   InputR p -> handleInput p
-  Unary cmd' -> case cmd' of 
+  Unary cmd' -> case cmd' of
     New -> handleNew 
     Addinput -> handleAddInput
     Signup -> signup 

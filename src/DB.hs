@@ -354,8 +354,8 @@ updateScore u sc = tryDB runUpdate_ uArgs
       , uWhere = (sqlInt4 (u ^. userId) .==) . view tupId
       }
 
-updatedSolved :: User -> ProbId -> DBErr Bool
-updatedSolved usr pid = tryDB runUpdate_ $ Update
+updateSolved :: User -> ProbId -> DBErr Bool
+updateSolved usr pid = tryDB runUpdate_ $ Update
   { uTable = answerTable
   , uReturning = rReturningI (view solved)
   , uUpdateWith = solved .~ sqlBool True
@@ -372,7 +372,7 @@ markSubmission :: ProbId -> User -> Value -> DBErr Int
 markSubmission pid user ans = do
   res <- verifySolution pid user ans
   if res then do
-    updatedSolved user pid 
+    updateSolved user pid 
     updateScore user correctSolutionPts
   else except $ Left WrongAnswer
 

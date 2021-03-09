@@ -30,9 +30,6 @@ caseBlindC = liftA2 (<|>) char (char . chr . xor 32 . ord)
 caseBlindS :: String -> Parser String
 caseBlindS = traverse caseBlindC
 
-p :: String -> IO ()
-p = parseTest parseCommand 
-
 capitalize :: String -> String
 capitalize = mapCons toUpper toLower
     where mapCons _ _ [] = []
@@ -42,7 +39,7 @@ parseCommand :: Parser BotCmd
 parseCommand = do 
     char msgPrefix
     s <- choice (map (try . caseBlindS) commandStrings) 
-    maybe empty pure . readMaybe . capitalize $ s
+    maybe empty pure . readMaybe $ capitalize s
 
 parseProbId :: Parser ProbId
 parseProbId = ProbId . read <$> many1 digit 
